@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+client/dist/
+client/.vite/
+
+# Environment files (never commit real secrets)
+.env
+.env.local
+.env.production
+server/.env
+
+# SQLite database (local data — do not commit)
+server/db/tracker.db
+server/db/tracker.db-shm
+server/db/tracker.db-wal
+
+# macOS
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
