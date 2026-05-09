@@ -19,8 +19,8 @@ router.get('/', (req, res) => {
   const { status, search, page = 1, limit = 50 } = req.query;
   const offset = (Number(page) - 1) * Number(limit);
 
-  let where = '1=1';
-  const positional = [];
+  let where = 'user_id = ?';
+  const positional = [req.user.id];
 
   if (status && status !== 'All') {
     where += ' AND status = ?';
@@ -45,7 +45,9 @@ router.get('/', (req, res) => {
 });
 
 // ─── GET /api/applications/stats ─────────────────────────────────────────────
-router.get('/stats', (_req, res) => {
+router.get('/stats', (req, res) => {
+  const uid = req.user.id;
+
   const stats = db.prepare(`
     SELECT
       COUNT(*)                                                AS total,
@@ -55,31 +57,31 @@ router.get('/stats', (_req, res) => {
       SUM(CASE WHEN status = 'Rejected'     THEN 1 ELSE 0 END) AS rejected,
       SUM(CASE WHEN status = 'No Response'  THEN 1 ELSE 0 END) AS no_response,
       SUM(CASE WHEN status = 'Discarded'    THEN 1 ELSE 0 END) AS discarded
-    FROM applications
-  `).get();
+    FROM applications WHERE user_id = ?
+  `).get(uid);
 
   const byPortal = db.prepare(`
     SELECT portal, COUNT(*) AS count
     FROM applications
-    WHERE portal IS NOT NULL AND portal != ''
+    WHERE user_id = ? AND portal IS NOT NULL AND portal != ''
     GROUP BY portal
     ORDER BY count DESC
-  `).all();
+  `).all(uid);
 
   const last30Days = db.prepare(`
     SELECT DATE(applied_date) AS date, COUNT(*) AS count
     FROM applications
-    WHERE applied_date >= DATE('now', '-30 days')
+    WHERE user_id = ? AND applied_date >= DATE('now', '-30 days')
     GROUP BY DATE(applied_date)
     ORDER BY date ASC
-  `).all();
+  `).all(uid);
 
   res.json({ stats, byPortal, last30Days });
 });
 
 // ─── GET /api/applications/:id ───────────────────────────────────────────────
 router.get('/:id', (req, res) => {
-  const row = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
+  const row = db.prepare('SELECT * FROM applications WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
   res.json(row);
 });
@@ -101,13 +103,13 @@ router.post('/', (req, res) => {
 
   const stmt = db.prepare(`
     INSERT INTO applications
-      (company, role, location, portal, job_url, job_description,
+      (user_id, company, role, location, portal, job_url, job_description,
        recruiter_name, recruiter_email,
        salary_min, salary_max, salary_currency,
        status, remarks, applied_date, interview_date,
        last_updated, discard_after_days)
     VALUES
-      (@company, @role, @location, @portal, @job_url, @job_description,
+      (@user_id, @company, @role, @location, @portal, @job_url, @job_description,
        @recruiter_name, @recruiter_email,
        @salary_min, @salary_max, @salary_currency,
        @status, @remarks, @applied_date, @interview_date,
@@ -115,6 +117,7 @@ router.post('/', (req, res) => {
   `);
 
   const result = stmt.run({
+    user_id: req.user.id,
     company, role,
     location:          location          ?? null,
     portal:            portal            ?? null,
@@ -137,7 +140,7 @@ router.post('/', (req, res) => {
 
 // ─── PATCH /api/applications/:id ─────────────────────────────────────────────
 router.patch('/:id', (req, res) => {
-  const existing = db.prepare('SELECT id FROM applications WHERE id = ?').get(req.params.id);
+  const existing = db.prepare('SELECT id FROM applications WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
 
   const updates = { last_updated: new Date().toISOString() };
@@ -150,16 +153,16 @@ router.patch('/:id', (req, res) => {
   }
 
   const setClause = Object.keys(updates).map((k) => `${k} = @${k}`).join(', ');
-  db.prepare(`UPDATE applications SET ${setClause} WHERE id = @_id`)
-    .run({ ...updates, _id: req.params.id });
+  db.prepare(`UPDATE applications SET ${setClause} WHERE id = @_id AND user_id = @_uid`)
+    .run({ ...updates, _id: req.params.id, _uid: req.user.id });
 
-  const updated = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
+  const updated = db.prepare('SELECT * FROM applications WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   res.json(updated);
 });
 
 // ─── DELETE /api/applications/:id ─────────────────────────────────────────────
 router.delete('/:id', (req, res) => {
-  const result = db.prepare('DELETE FROM applications WHERE id = ?').run(req.params.id);
+  const result = db.prepare('DELETE FROM applications WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
   if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ success: true });
 });

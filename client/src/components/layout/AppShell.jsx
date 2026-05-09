@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, Trash2, Settings,
-  Menu, X, Briefcase, Download,
+  Menu, X, Briefcase, Download, LogOut, User,
 } from 'lucide-react';
 import { exportExcel } from '../../api/applications';
+import { useAuth } from '../../context/AuthContext';
 
 const NAV = [
   { to: '/',             icon: LayoutDashboard, label: 'Dashboard'    },
@@ -32,6 +33,7 @@ function NavItem({ to, icon: Icon, label, onClick }) {
 
 export default function AppShell() {
   const [open, setOpen] = useState(false);
+  const { user, logout } = useAuth();
   const close = () => setOpen(false);
 
   const sidebarContent = (onNavClick) => (
@@ -41,7 +43,7 @@ export default function AppShell() {
           <NavItem key={item.to} {...item} onClick={onNavClick} />
         ))}
       </nav>
-      <div className="px-3 py-4 border-t border-white/10">
+      <div className="px-3 py-4 border-t border-white/10 space-y-1">
         <button
           onClick={() => exportExcel()}
           className="flex items-center gap-2 w-full px-3 py-2.5 rounded-lg text-sm
@@ -49,6 +51,14 @@ export default function AppShell() {
         >
           <Download size={18} />
           Export All to Excel
+        </button>
+        <button
+          onClick={logout}
+          className="flex items-center gap-2 w-full px-3 py-2.5 rounded-lg text-sm
+                     text-white/70 hover:bg-white/10 hover:text-rose-300 transition-colors"
+        >
+          <LogOut size={18} />
+          Sign Out
         </button>
       </div>
     </>
@@ -61,8 +71,8 @@ export default function AppShell() {
       <aside className="hidden lg:flex flex-col w-64 bg-navy text-white shrink-0">
         <div className="flex items-center gap-3 px-6 py-5 border-b border-white/10">
           <Briefcase className="text-teal shrink-0" size={24} />
-          <div className="leading-tight">
-            <p className="font-bold text-sm">Himanshu</p>
+          <div className="leading-tight min-w-0">
+            <p className="font-bold text-sm truncate">{user?.name || 'User'}</p>
             <p className="text-teal text-xs font-normal">Job Tracker</p>
           </div>
         </div>
@@ -102,7 +112,7 @@ export default function AppShell() {
           <button onClick={() => setOpen(true)} aria-label="Open menu">
             <Menu size={22} />
           </button>
-          <span className="font-semibold text-sm">Himanshu Job Tracker</span>
+          <span className="font-semibold text-sm">{user?.name}'s Job Tracker</span>
         </header>
 
         <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">

@@ -4,6 +4,7 @@
 
 CREATE TABLE IF NOT EXISTS applications (
   id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id            INTEGER NOT NULL DEFAULT 0 REFERENCES users(id),
 
   -- Core info
   company            TEXT    NOT NULL,
@@ -41,3 +42,4 @@ CREATE TABLE IF NOT EXISTS applications (
 CREATE INDEX IF NOT EXISTS idx_status       ON applications(status);
 CREATE INDEX IF NOT EXISTS idx_applied_date ON applications(applied_date);
 CREATE INDEX IF NOT EXISTS idx_company      ON applications(company);
+CREATE INDEX IF NOT EXISTS idx_user_id      ON applications(user_id);

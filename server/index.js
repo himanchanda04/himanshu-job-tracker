@@ -1,7 +1,9 @@
 import express              from 'express';
 import cors                 from 'cors';
+import authRouter           from './routes/auth.js';
 import applicationsRouter   from './routes/applications.js';
 import exportRouter         from './routes/export.js';
+import { authenticate }     from './middleware/auth.js';
 import { startAutoDiscardJob } from './middleware/autoDiscard.js';
 
 const app  = express();
@@ -19,8 +21,9 @@ app.use(express.json());
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
-app.use('/api/applications', applicationsRouter);
-app.use('/api/export',       exportRouter);
+app.use('/api/auth',         authRouter);
+app.use('/api/applications', authenticate, applicationsRouter);
+app.use('/api/export',       authenticate, exportRouter);
 
 app.get('/api/health', (_req, res) =>
   res.json({ status: 'ok', ts: new Date().toISOString() })

@@ -19,10 +19,11 @@ const router = Router();
 // GET /api/export/excel?status=Applied
 router.get('/excel', async (req, res) => {
   const { status } = req.query;
+  const uid = req.user.id;
 
   const rows = (status && status !== 'All')
-    ? db.prepare('SELECT * FROM applications WHERE status = ? ORDER BY applied_date DESC').all(status)
-    : db.prepare('SELECT * FROM applications ORDER BY applied_date DESC').all();
+    ? db.prepare('SELECT * FROM applications WHERE user_id = ? AND status = ? ORDER BY applied_date DESC').all(uid, status)
+    : db.prepare('SELECT * FROM applications WHERE user_id = ? ORDER BY applied_date DESC').all(uid);
 
   const wb = new ExcelJS.Workbook();
   wb.creator  = 'Himanshu Job Application Tracker';
