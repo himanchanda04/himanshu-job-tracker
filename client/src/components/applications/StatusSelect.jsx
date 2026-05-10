@@ -1,63 +1,70 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { STATUS_STYLES } from '../../design/colors';
 
 const STATUSES = ['Applied', 'Interview', 'Offer', 'Rejected', 'No Response', 'Discarded'];
 
-/**
- * Custom colour-coded status dropdown.
- * Each option shows its status colour as a dot + tinted background on hover.
- * Works both inside forms and as an inline quick-change in tables.
- *
- * Props:
- *   value       — current status string
- *   onChange     — (newStatus: string) => void
- *   compact     — if true, renders a smaller pill-style trigger (for inline table use)
- *   disabled    — disables interaction
- */
 export default function StatusSelect({ value, onChange, compact = false, disabled = false }) {
   const [open, setOpen] = useState(false);
-  const [openUp, setOpenUp] = useState(false);
-  const ref = useRef(null);
+  const [pos, setPos] = useState({ top: 0, left: 0, openUp: false });
+  const triggerRef = useRef(null);
+  const dropdownRef = useRef(null);
 
-  // Close on outside click
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUp = spaceBelow < 280;
+    setPos({
+      top: openUp ? rect.top + window.scrollY : rect.bottom + window.scrollY + 4,
+      left: rect.left + window.scrollX,
+      openUp,
+    });
+  }, []);
+
   useEffect(() => {
     if (!open) return;
-    const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    const handleOutside = (e) => {
+      if (
+        triggerRef.current && !triggerRef.current.contains(e.target) &&
+        dropdownRef.current && !dropdownRef.current.contains(e.target)
+      ) {
+        setOpen(false);
+      }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    const handleEsc = (e) => { if (e.key === 'Escape') setOpen(false); };
+    const handleScroll = () => setOpen(false);
+
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('keydown', handleEsc);
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('keydown', handleEsc);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
   }, [open]);
 
-  // Close on Escape
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [open]);
-
-  const current = STATUS_STYLES[value] || STATUS_STYLES.Applied;
+  const handleToggle = () => {
+    if (!open) updatePosition();
+    setOpen(!open);
+  };
 
   const handleSelect = (status) => {
     onChange(status);
     setOpen(false);
   };
 
+  const current = STATUS_STYLES[value] || STATUS_STYLES.Applied;
+
   return (
-    <div className="relative inline-block" ref={ref}>
-      {/* Trigger */}
+    <>
       <button
+        ref={triggerRef}
         type="button"
         disabled={disabled}
-        onClick={() => {
-          if (!open && ref.current) {
-            const rect = ref.current.getBoundingClientRect();
-            setOpenUp(window.innerHeight - rect.bottom < 280);
-          }
-          setOpen(!open);
-        }}
+        onClick={handleToggle}
         className={
           compact
             ? `inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold
@@ -80,12 +87,16 @@ export default function StatusSelect({ value, onChange, compact = false, disable
         />
       </button>
 
-      {/* Dropdown */}
-      {open && (
+      {open && createPortal(
         <div
-          className={`absolute z-50 w-48 bg-white rounded-xl border border-border shadow-lg
-                     py-1 ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'}`}
+          ref={dropdownRef}
           role="listbox"
+          className="fixed z-[9999] w-48 bg-white rounded-xl border border-border shadow-lg py-1"
+          style={{
+            top: pos.openUp ? undefined : pos.top - window.scrollY,
+            bottom: pos.openUp ? window.innerHeight - (pos.top - window.scrollY) + 4 : undefined,
+            left: pos.left - window.scrollX,
+          }}
         >
           {STATUSES.map((status) => {
             const style = STATUS_STYLES[status];
@@ -112,8 +123,9 @@ export default function StatusSelect({ value, onChange, compact = false, disable
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
