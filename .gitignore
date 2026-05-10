@@ -10,7 +10,6 @@ client/.vite/
 # Environment files (never commit real secrets)
 .env
 .env.local
-.env.production
 server/.env
 
 # SQLite database (local data — do not commit)
