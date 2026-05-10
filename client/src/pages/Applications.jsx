@@ -96,8 +96,8 @@ export default function Applications() {
       </div>
 
       {/* ── Desktop table ── */}
-      <div className="hidden md:block bg-white rounded-xl shadow-card overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="hidden md:block bg-white rounded-xl shadow-card">
+        <div className="overflow-x-auto overflow-y-visible">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-bg border-b border-border text-xs text-muted font-semibold uppercase tracking-wide">
