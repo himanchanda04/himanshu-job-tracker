@@ -17,6 +17,7 @@ const STATUSES = ['Applied', 'Interview', 'Offer', 'Rejected', 'No Response', 'D
  */
 export default function StatusSelect({ value, onChange, compact = false, disabled = false }) {
   const [open, setOpen] = useState(false);
+  const [openUp, setOpenUp] = useState(false);
   const ref = useRef(null);
 
   // Close on outside click
@@ -50,7 +51,13 @@ export default function StatusSelect({ value, onChange, compact = false, disable
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          if (!open && ref.current) {
+            const rect = ref.current.getBoundingClientRect();
+            setOpenUp(window.innerHeight - rect.bottom < 280);
+          }
+          setOpen(!open);
+        }}
         className={
           compact
             ? `inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold
@@ -76,8 +83,8 @@ export default function StatusSelect({ value, onChange, compact = false, disable
       {/* Dropdown */}
       {open && (
         <div
-          className="absolute z-50 mt-1 w-48 bg-white rounded-xl border border-border shadow-lg
-                     py-1 animate-in fade-in slide-in-from-top-1"
+          className={`absolute z-50 w-48 bg-white rounded-xl border border-border shadow-lg
+                     py-1 ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'}`}
           role="listbox"
         >
           {STATUSES.map((status) => {

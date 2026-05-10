@@ -12,9 +12,9 @@ const PORT = process.env.PORT || 3001;
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
 app.use(cors({
-  // In production set CORS_ORIGIN to your Vercel URL, e.g. https://your-app.vercel.app
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: true,
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 app.use(express.json());
