@@ -1,10 +1,7 @@
 import { Router }  from 'express';
 import ExcelJS      from 'exceljs';
-import db           from '../db/database.js';
+import pool         from '../db/database.js';
 
-// Excel status colours are duplicated here from the frontend design/colors.js
-// because this runs on the server (no ES module sharing with client).
-// If you add a status, update both files.
 const STATUS_FILL = {
   Applied:       'FFBFDBFE',
   Interview:     'FFD1FAE5',
@@ -21,9 +18,19 @@ router.get('/excel', async (req, res) => {
   const { status } = req.query;
   const uid = req.user.id;
 
-  const rows = (status && status !== 'All')
-    ? db.prepare('SELECT * FROM applications WHERE user_id = ? AND status = ? ORDER BY applied_date DESC').all(uid, status)
-    : db.prepare('SELECT * FROM applications WHERE user_id = ? ORDER BY applied_date DESC').all(uid);
+  let result;
+  if (status && status !== 'All') {
+    result = await pool.query(
+      'SELECT * FROM applications WHERE user_id = $1 AND status = $2 ORDER BY applied_date DESC',
+      [uid, status]
+    );
+  } else {
+    result = await pool.query(
+      'SELECT * FROM applications WHERE user_id = $1 ORDER BY applied_date DESC',
+      [uid]
+    );
+  }
+  const rows = result.rows;
 
   const wb = new ExcelJS.Workbook();
   wb.creator  = 'Himanshu Job Application Tracker';
@@ -35,7 +42,6 @@ router.get('/excel', async (req, res) => {
     pageSetup: { fitToPage: true, orientation: 'landscape' },
   });
 
-  // Column definitions — to add a column: add an entry here
   ws.columns = [
     { header: 'ID',              key: 'id',              width: 6  },
     { header: 'Company',         key: 'company',         width: 22 },
@@ -54,7 +60,6 @@ router.get('/excel', async (req, res) => {
     { header: 'Job URL',         key: 'job_url',         width: 42 },
   ];
 
-  // Style the header row
   const headerRow = ws.getRow(1);
   headerRow.height = 28;
   headerRow.eachCell((cell) => {
@@ -64,7 +69,6 @@ router.get('/excel', async (req, res) => {
     cell.border    = { bottom: { style: 'medium', color: { argb: 'FF00BFA5' } } };
   });
 
-  // Data rows — colour-coded by status
   for (const row of rows) {
     const dataRow = ws.addRow(row);
     const argb    = STATUS_FILL[row.status] ?? 'FFFFFFFF';

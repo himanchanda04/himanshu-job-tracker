@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import db from '../db/database.js';
+import pool from '../db/database.js';
 
 /**
  * Runs every night at midnight.
@@ -7,21 +7,25 @@ import db from '../db/database.js';
  * when the number of days since applied_date >= discard_after_days.
  */
 export function startAutoDiscardJob() {
-  cron.schedule('0 0 * * *', () => {
-    const result = db.prepare(`
-      UPDATE applications
-      SET
-        status        = 'Discarded',
-        auto_discarded = 1,
-        last_updated  = datetime('now')
-      WHERE
-        status IN ('Applied', 'No Response')
-        AND auto_discarded = 0
-        AND julianday('now') - julianday(applied_date) >= discard_after_days
-    `).run();
+  cron.schedule('0 0 * * *', async () => {
+    try {
+      const result = await pool.query(`
+        UPDATE applications
+        SET
+          status         = 'Discarded',
+          auto_discarded = 1,
+          last_updated   = NOW()
+        WHERE
+          status IN ('Applied', 'No Response')
+          AND auto_discarded = 0
+          AND (CURRENT_DATE - applied_date::date) >= discard_after_days
+      `);
 
-    if (result.changes > 0) {
-      console.log(`[AutoDiscard] ${result.changes} application(s) moved to Discarded.`);
+      if (result.rowCount > 0) {
+        console.log(`[AutoDiscard] ${result.rowCount} application(s) moved to Discarded.`);
+      }
+    } catch (err) {
+      console.error('[AutoDiscard] Error:', err.message);
     }
   });
 

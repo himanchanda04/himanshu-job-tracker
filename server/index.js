@@ -1,5 +1,6 @@
 import express              from 'express';
 import cors                 from 'cors';
+import { initDB }           from './db/database.js';
 import authRouter           from './routes/auth.js';
 import applicationsRouter   from './routes/applications.js';
 import exportRouter         from './routes/export.js';
@@ -31,8 +32,16 @@ app.get('/api/health', (_req, res) =>
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 
-startAutoDiscardJob();
+async function start() {
+  await initDB();
+  startAutoDiscardJob();
 
-app.listen(PORT, () =>
-  console.log(`Server running → http://localhost:${PORT}`)
-);
+  app.listen(PORT, () =>
+    console.log(`Server running → http://localhost:${PORT}`)
+  );
+}
+
+start().catch((err) => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
+});

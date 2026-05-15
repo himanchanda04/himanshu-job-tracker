@@ -1,38 +1,68 @@
-import Database from 'better-sqlite3';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import pg from 'pg';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const { Pool } = pg;
 
-const db = new Database(join(__dirname, 'tracker.db'));
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes('localhost') ? false : { rejectUnauthorized: false },
+});
 
-// WAL mode: faster writes, safe concurrent reads
-db.pragma('journal_mode = WAL');
+// ─── Initialize schema on startup ───────────────────────────────────────────
+export async function initDB() {
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id            SERIAL PRIMARY KEY,
+        name          TEXT    NOT NULL,
+        email         TEXT    NOT NULL UNIQUE,
+        password_hash TEXT    NOT NULL,
+        created_at    TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
 
-// Create users table first (needed before applications references it)
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    name          TEXT    NOT NULL,
-    email         TEXT    NOT NULL UNIQUE COLLATE NOCASE,
-    password_hash TEXT    NOT NULL,
-    created_at    TEXT    DEFAULT (datetime('now'))
-  );
-`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS applications (
+        id                 SERIAL PRIMARY KEY,
+        user_id            INTEGER NOT NULL DEFAULT 0 REFERENCES users(id),
 
-// Migration: add user_id to applications if table exists but column doesn't
-const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='applications'").get();
-if (tableExists) {
-  const cols = db.prepare("PRAGMA table_info(applications)").all().map(c => c.name);
-  if (!cols.includes('user_id')) {
-    db.exec("ALTER TABLE applications ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0");
+        company            TEXT    NOT NULL,
+        role               TEXT    NOT NULL,
+        location           TEXT,
+        portal             TEXT,
+        job_url            TEXT,
+        job_description    TEXT,
+
+        recruiter_name     TEXT,
+        recruiter_email    TEXT,
+
+        salary_min         INTEGER,
+        salary_max         INTEGER,
+        salary_currency    TEXT    DEFAULT 'CAD',
+
+        status             TEXT    DEFAULT 'Applied'
+                           CHECK(status IN ('Applied','Interview','Offer','Rejected','No Response','Discarded')),
+        applied_date       TEXT    NOT NULL,
+        interview_date     TEXT,
+        last_updated       TEXT    NOT NULL DEFAULT TO_CHAR(NOW(), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+        created_at         TIMESTAMPTZ DEFAULT NOW(),
+
+        discard_after_days INTEGER DEFAULT 20,
+        auto_discarded     INTEGER DEFAULT 0,
+
+        remarks            TEXT
+      );
+    `);
+
+    await client.query('CREATE INDEX IF NOT EXISTS idx_status       ON applications(status)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_applied_date ON applications(applied_date)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_company      ON applications(company)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_user_id      ON applications(user_id)');
+
+    console.log('[DB] PostgreSQL schema initialized.');
+  } finally {
+    client.release();
   }
 }
 
-// Now enable foreign keys and run full schema
-db.pragma('foreign_keys = ON');
-const schema = readFileSync(join(__dirname, 'schema.sql'), 'utf8');
-db.exec(schema);
-
-export default db;
+export default pool;
