@@ -2,19 +2,18 @@ import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, Trash2, Settings,
-  Menu, X, Briefcase, Download, LogOut, User,
-  Sparkles, Mail,
+  Menu, X, Briefcase, Download, LogOut,
+  Sparkles,
 } from 'lucide-react';
 import { exportExcel } from '../../api/applications';
 import { useAuth } from '../../context/AuthContext';
 
 const NAV = [
-  { to: '/',              icon: LayoutDashboard, label: 'Dashboard'    },
-  { to: '/applications',  icon: FileText,        label: 'Applications' },
-  { to: '/discarded',     icon: Trash2,          label: 'Discarded'    },
-  { to: '/resume',        icon: Sparkles,        label: 'Resume'       },
-  { to: '/cover-letter',  icon: Mail,            label: 'Cover Letter' },
-  { to: '/settings',      icon: Settings,        label: 'Settings'     },
+  { to: '/',             icon: LayoutDashboard, label: 'Dashboard'    },
+  { to: '/applications', icon: FileText,        label: 'Applications' },
+  { to: '/discarded',    icon: Trash2,          label: 'Discarded'    },
+  { to: '/ai-tools',     icon: Sparkles,        label: 'AI Tools'     },
+  { to: '/settings',     icon: Settings,        label: 'Settings'     },
 ];
 
 function NavItem({ to, icon: Icon, label, onClick }) {

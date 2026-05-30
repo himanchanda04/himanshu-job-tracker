@@ -5,8 +5,7 @@ import Dashboard     from './pages/Dashboard';
 import Applications  from './pages/Applications';
 import Discarded     from './pages/Discarded';
 import Settings      from './pages/Settings';
-import Resume        from './pages/Resume';
-import CoverLetter   from './pages/CoverLetter';
+import AITools       from './pages/AITools';
 import Login         from './pages/Login';
 import Register      from './pages/Register';
 
@@ -40,8 +39,9 @@ export default function App() {
             <Route path="applications"      element={<Applications />} />
             <Route path="discarded"         element={<Discarded />}    />
             <Route path="settings"          element={<Settings />}     />
-            <Route path="resume"            element={<Resume />}       />
-            <Route path="cover-letter"      element={<CoverLetter />}  />
+            <Route path="ai-tools"          element={<AITools />}      />
+            <Route path="resume"            element={<Navigate to="/ai-tools" replace />} />
+            <Route path="cover-letter"      element={<Navigate to="/ai-tools" replace />} />
           </Route>
         </Routes>
       </AuthProvider>
