@@ -64,8 +64,15 @@ router.post('/login', async (req, res) => {
 });
 
 // ─── GET /api/auth/me ────────────────────────────────────────────────────────
-router.get('/me', authenticate, (req, res) => {
-  res.json({ user: req.user });
+router.get('/me', authenticate, async (req, res) => {
+  const result = await pool.query('SELECT last_resume FROM users WHERE id = $1', [req.user.id]);
+  res.json({ user: { ...req.user, last_resume: result.rows[0]?.last_resume || '' } });
+});
+
+router.patch('/me', authenticate, async (req, res) => {
+  const { last_resume } = req.body;
+  await pool.query('UPDATE users SET last_resume = $1 WHERE id = $2', [last_resume ?? '', req.user.id]);
+  res.json({ ok: true });
 });
 
 // ─── POST /api/auth/change-password ──────────────────────────────────────────

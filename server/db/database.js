@@ -21,6 +21,8 @@ export async function initDB() {
       );
     `);
 
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_resume TEXT DEFAULT ''`);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS applications (
         id                 SERIAL PRIMARY KEY,
