@@ -29,7 +29,7 @@ app.use('/api/export',       authenticate, exportRouter);
 app.use('/api/ai',           authenticate, aiRouter);
 
 app.get('/api/health', (_req, res) =>
-  res.json({ status: 'ok', ts: new Date().toISOString() })
+  res.json({ status: 'ok', ts: new Date().toISOString(), hasApiKey: !!process.env.ANTHROPIC_API_KEY })
 );
 
 // ─── Start ────────────────────────────────────────────────────────────────────
