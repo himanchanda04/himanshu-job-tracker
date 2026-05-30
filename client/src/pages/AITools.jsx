@@ -231,6 +231,16 @@ export default function AITools() {
   }
 
   const canGenerate = resume.trim().length > 50 && jd.trim().length > 50;
+  const anyLoading  = resumeLoading || clLoading;
+
+  function generateAll() {
+    runStream('/api/ai/resume',       setResumeOut, setResumeLoading, setResumeError, resumeAbort);
+    runStream('/api/ai/cover-letter', setClOut,     setClLoading,     setClError,     clAbort);
+  }
+  function stopAll() {
+    resumeAbort.current?.abort();
+    clAbort.current?.abort();
+  }
 
   async function copyText(text, setCopied) {
     await navigator.clipboard.writeText(text);
@@ -319,15 +329,119 @@ export default function AITools() {
               placeholder="Job description will appear here after fetching from URL, or paste it manually…"
               value={jd}
               onChange={saveJd}
-              rows={18}
+              rows={jd.trim().length > 50 ? 10 : 18}
               uploadable
             />
-            {jd.trim().length > 50 && (
-              <p className="text-xs text-teal mt-2">
-                ✓ Job description saved — switch to Resume, Cover Letter, or Interview Prep tab to generate.
-              </p>
-            )}
           </div>
+
+          {/* ── Quick Generate panel — appears once JD is filled ── */}
+          {jd.trim().length > 50 && (
+            <div className="bg-white rounded-xl shadow-card p-5 space-y-4 border-t-2 border-teal/30">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-bold text-navy flex items-center gap-2">
+                    <Sparkles size={16} className="text-teal" />Generate with AI
+                  </h2>
+                  <p className="text-xs text-muted mt-0.5">
+                    Your saved resume is pre-loaded. One click to get an optimized resume + cover letter.
+                  </p>
+                </div>
+                {canGenerate && !anyLoading && (resumeOut || clOut) && (
+                  <button onClick={() => { setResumeOut(''); setClOut(''); setResumeError(''); setClError(''); }}
+                    className="flex items-center gap-1.5 text-xs text-muted hover:text-navy transition-colors">
+                    <RotateCcw size={13} />Clear
+                  </button>
+                )}
+              </div>
+
+              <Textarea
+                label="Your Resume"
+                placeholder="Your resume auto-loads from last save — or paste / upload a new one…"
+                value={resume}
+                onChange={setResume}
+                rows={7}
+                uploadable
+              />
+
+              <div className="flex items-center gap-3 flex-wrap">
+                {!anyLoading ? (
+                  <button
+                    onClick={generateAll}
+                    disabled={!canGenerate}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-teal text-white text-sm font-semibold
+                               shadow-sm hover:bg-teal/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                    <Sparkles size={16} />Optimize Resume + Cover Letter
+                  </button>
+                ) : (
+                  <button onClick={stopAll}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-rose-500 text-white text-sm font-semibold hover:bg-rose-600 transition-all">
+                    Stop
+                  </button>
+                )}
+                {resumeLoading && <span className="text-xs text-muted animate-pulse">Optimizing resume…</span>}
+                {clLoading     && <span className="text-xs text-muted animate-pulse ml-2">Writing cover letter…</span>}
+              </div>
+
+              {(resumeError || clError) && (
+                <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
+                  <AlertCircle size={16} className="text-rose-500 mt-0.5 shrink-0" />
+                  <p className="text-sm text-rose-700">{resumeError || clError}</p>
+                </div>
+              )}
+
+              {(resumeOut || resumeLoading || clOut || clLoading) && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+                  {/* Optimized Resume */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold text-navy flex items-center gap-1.5">
+                        <FileText size={13} className="text-teal" />Optimized Resume
+                        {resumeLoading && <span className="inline-block w-1.5 h-3.5 bg-teal animate-pulse rounded-sm ml-1" />}
+                      </h3>
+                      {resumeOut && !resumeLoading && (
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => copyText(resumeOut, setResumeCopied)}
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border text-xs text-muted hover:text-navy hover:border-navy transition-colors">
+                            {resumeCopied ? <Check size={11} className="text-teal" /> : <Copy size={11} />}
+                            {resumeCopied ? 'Copied!' : 'Copy'}
+                          </button>
+                          <DownloadMenu text={resumeOut} filename="optimized-resume" />
+                        </div>
+                      )}
+                    </div>
+                    <pre className="whitespace-pre-wrap text-xs text-slate-700 font-mono leading-relaxed bg-slate-50 rounded-lg p-3 max-h-[400px] overflow-y-auto min-h-[80px]">
+                      {resumeOut || ' '}
+                    </pre>
+                  </div>
+
+                  {/* Cover Letter */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold text-navy flex items-center gap-1.5">
+                        <Mail size={13} className="text-teal" />Cover Letter
+                        {clLoading && <span className="inline-block w-1.5 h-3.5 bg-teal animate-pulse rounded-sm ml-1" />}
+                      </h3>
+                      {clOut && !clLoading && (
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => copyText(clOut, setClCopied)}
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border text-xs text-muted hover:text-navy hover:border-navy transition-colors">
+                            {clCopied ? <Check size={11} className="text-teal" /> : <Copy size={11} />}
+                            {clCopied ? 'Copied!' : 'Copy'}
+                          </button>
+                          <DownloadMenu text={clOut} filename="cover-letter" />
+                        </div>
+                      )}
+                    </div>
+                    <pre className="whitespace-pre-wrap text-xs text-slate-700 leading-relaxed bg-slate-50 rounded-lg p-3 max-h-[400px] overflow-y-auto min-h-[80px]">
+                      {clOut || ' '}
+                    </pre>
+                  </div>
+
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
