@@ -183,8 +183,12 @@ export default function AITools() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ url: jdUrl.trim() }),
       });
+      if (!res.ok) {
+        let msg = `Server error (${res.status}) — the backend may still be deploying, try again in 30s`;
+        try { const d = await res.json(); msg = d.error || msg; } catch {}
+        throw new Error(msg);
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
       saveJd(data.text);
       setJdUrl('');
     } catch (err) {
