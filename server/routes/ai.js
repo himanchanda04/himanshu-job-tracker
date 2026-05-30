@@ -1,8 +1,11 @@
 import { Router }    from 'express';
 import Anthropic      from '@anthropic-ai/sdk';
 
-const router     = Router();
-const anthropic  = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const router = Router();
+
+function getClient() {
+  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+}
 
 const RECRUITER_SYSTEM = `You are a senior technical recruiter and hiring manager with 15+ years of experience at top companies (Google, Amazon, Microsoft, top startups). You have reviewed tens of thousands of resumes and have deep expertise in ATS systems, keyword optimization, and what makes hiring managers immediately shortlist a candidate. You are direct, precise, and output only what is asked — no preamble, no commentary.`;
 
@@ -31,7 +34,7 @@ router.post('/resume', async (req, res) => {
   const sse = sseStream(res);
 
   try {
-    const stream = anthropic.messages.stream({
+    const stream = getClient().messages.stream({
       model:      'claude-sonnet-4-6',
       max_tokens: 4096,
       system:     RECRUITER_SYSTEM,
@@ -78,7 +81,7 @@ router.post('/cover-letter', async (req, res) => {
   const sse = sseStream(res);
 
   try {
-    const stream = anthropic.messages.stream({
+    const stream = getClient().messages.stream({
       model:      'claude-sonnet-4-6',
       max_tokens: 1024,
       system:     RECRUITER_SYSTEM,
