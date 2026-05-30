@@ -5,6 +5,8 @@ import Dashboard     from './pages/Dashboard';
 import Applications  from './pages/Applications';
 import Discarded     from './pages/Discarded';
 import Settings      from './pages/Settings';
+import Resume        from './pages/Resume';
+import CoverLetter   from './pages/CoverLetter';
 import Login         from './pages/Login';
 import Register      from './pages/Register';
 
@@ -38,6 +40,8 @@ export default function App() {
             <Route path="applications"      element={<Applications />} />
             <Route path="discarded"         element={<Discarded />}    />
             <Route path="settings"          element={<Settings />}     />
+            <Route path="resume"            element={<Resume />}       />
+            <Route path="cover-letter"      element={<CoverLetter />}  />
           </Route>
         </Routes>
       </AuthProvider>

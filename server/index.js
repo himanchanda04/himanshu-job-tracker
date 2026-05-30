@@ -4,6 +4,7 @@ import { initDB }           from './db/database.js';
 import authRouter           from './routes/auth.js';
 import applicationsRouter   from './routes/applications.js';
 import exportRouter         from './routes/export.js';
+import aiRouter             from './routes/ai.js';
 import { authenticate }     from './middleware/auth.js';
 import { startAutoDiscardJob } from './middleware/autoDiscard.js';
 
@@ -25,6 +26,7 @@ app.use(express.json());
 app.use('/api/auth',         authRouter);
 app.use('/api/applications', authenticate, applicationsRouter);
 app.use('/api/export',       authenticate, exportRouter);
+app.use('/api/ai',           authenticate, aiRouter);
 
 app.get('/api/health', (_req, res) =>
   res.json({ status: 'ok', ts: new Date().toISOString() })
