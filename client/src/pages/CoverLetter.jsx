@@ -15,8 +15,12 @@ async function parseFile(file) {
     headers: { Authorization: `Bearer ${token}` },
     body: form,
   });
+  if (!res.ok) {
+    let msg = `Upload failed (${res.status})`;
+    try { const d = await res.json(); msg = d.error || msg; } catch {}
+    throw new Error(msg);
+  }
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Parse failed');
   return data.text;
 }
 
