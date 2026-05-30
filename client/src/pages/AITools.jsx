@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import {
-  Briefcase, FileText, Mail, Sparkles, Copy, Check,
-  RotateCcw, AlertCircle, Upload, Download, ChevronDown, ExternalLink,
+  Briefcase, FileText, Mail, Brain, Sparkles, Copy, Check,
+  RotateCcw, AlertCircle, Upload, Download, ChevronDown, ExternalLink, Globe,
 } from 'lucide-react';
 import { api } from '../api/applications';
 import jsPDF from 'jspdf';
@@ -122,69 +122,22 @@ function Textarea({ label, value, onChange, placeholder, rows = 13, uploadable =
   );
 }
 
-function OutputCard({ title, output, loading, error, copied, onCopy, onReset, abortRef, filename }) {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3 flex-wrap">
-        {!loading ? (null) : (
-          <button onClick={() => abortRef.current?.abort()}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-rose-500 text-white text-sm font-semibold hover:bg-rose-600 transition-all">
-            Stop
-          </button>
-        )}
-        {(output || error) && (
-          <button onClick={onReset}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border text-sm font-medium text-muted hover:text-navy hover:border-navy transition-colors">
-            <RotateCcw size={14} />Reset
-          </button>
-        )}
-        {loading && <span className="text-sm text-muted animate-pulse">Writing with AI…</span>}
-      </div>
-
-      {error && (
-        <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
-          <AlertCircle size={16} className="text-rose-500 mt-0.5 shrink-0" />
-          <p className="text-sm text-rose-700">{error}</p>
-        </div>
-      )}
-
-      {(output || loading) && (
-        <div className="bg-white rounded-xl shadow-card p-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-navy flex items-center gap-2">
-              <Sparkles size={15} className="text-teal" />{title}
-              {loading && <span className="inline-block w-1.5 h-4 bg-teal animate-pulse rounded-sm ml-1" />}
-            </h2>
-            {output && !loading && (
-              <div className="flex items-center gap-2">
-                <button onClick={onCopy}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-muted hover:text-navy hover:border-navy transition-colors">
-                  {copied ? <Check size={13} className="text-teal" /> : <Copy size={13} />}
-                  {copied ? 'Copied!' : 'Copy'}
-                </button>
-                <DownloadMenu text={output} filename={filename} />
-              </div>
-            )}
-          </div>
-          <pre className="whitespace-pre-wrap text-sm text-slate-700 font-mono leading-relaxed bg-slate-50 rounded-lg p-4 max-h-[600px] overflow-y-auto">
-            {output || ' '}
-          </pre>
-        </div>
-      )}
-    </div>
-  );
-}
-
 const TABS = [
   { label: 'Job Description', icon: Briefcase },
   { label: 'Resume',          icon: FileText  },
   { label: 'Cover Letter',    icon: Mail      },
+  { label: 'Interview Prep',  icon: Brain     },
 ];
 
 export default function AITools() {
   const [tab, setTab]       = useState(0);
   const [resume, setResume] = useState('');
   const [jd, setJd]         = useState('');
+
+  // URL scraper state
+  const [jdUrl,        setJdUrl]        = useState('');
+  const [jdUrlLoading, setJdUrlLoading] = useState(false);
+  const [jdUrlError,   setJdUrlError]   = useState('');
 
   // Resume tab
   const [resumeOut,     setResumeOut]     = useState('');
@@ -200,6 +153,13 @@ export default function AITools() {
   const [clCopied,  setClCopied]  = useState(false);
   const clAbort = useRef(null);
 
+  // Interview Prep tab
+  const [ipOut,     setIpOut]     = useState('');
+  const [ipLoading, setIpLoading] = useState(false);
+  const [ipError,   setIpError]   = useState('');
+  const [ipCopied,  setIpCopied]  = useState(false);
+  const ipAbort = useRef(null);
+
   useEffect(() => {
     api.get('/auth/me')
       .then(r => { if (r.data.user.last_resume) setResume(r.data.user.last_resume); })
@@ -211,6 +171,27 @@ export default function AITools() {
   function saveJd(val) {
     setJd(val);
     localStorage.setItem('last_jd', val);
+  }
+
+  async function fetchJdFromUrl() {
+    setJdUrlError('');
+    setJdUrlLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${BASE}/api/ai/scrape-jd`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ url: jdUrl.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+      saveJd(data.text);
+      setJdUrl('');
+    } catch (err) {
+      setJdUrlError(err.message);
+    } finally {
+      setJdUrlLoading(false);
+    }
   }
 
   async function runStream(endpoint, setOut, setLoading, setError, abortRef) {
@@ -260,12 +241,12 @@ export default function AITools() {
           <Sparkles size={22} className="text-teal" />AI Career Tools
         </h1>
         <p className="text-sm text-muted mt-1">
-          Find jobs → paste description → optimize your resume and cover letter.
+          Find jobs → paste description → optimize your resume, cover letter, and interview prep.
         </p>
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit">
+      <div className="flex flex-wrap gap-1 bg-slate-100 rounded-xl p-1 w-fit">
         {TABS.map(({ label, icon: Icon }, i) => (
           <button key={label} onClick={() => setTab(i)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
@@ -278,26 +259,60 @@ export default function AITools() {
       {/* ── Tab 0: Job Description ─────────────────────────────────────────── */}
       {tab === 0 && (
         <div className="space-y-4">
-          <div className="bg-white rounded-xl shadow-card p-5 space-y-3">
+          <div className="bg-white rounded-xl shadow-card p-5 space-y-4">
             <div>
-              <h2 className="text-sm font-bold text-navy">Open a Job Portal</h2>
-              <p className="text-xs text-muted mt-0.5">Click a portal below, find a job, copy the description, then paste it in the box below.</p>
+              <h2 className="text-sm font-bold text-navy">Find a Job Posting</h2>
+              <p className="text-xs text-muted mt-0.5">Paste a direct job posting URL to auto-fill the description, or open a portal to browse jobs.</p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {PORTALS.map(({ name, url }) => (
-                <a key={name} href={url} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-slate-50
-                             text-xs font-medium text-slate-700 hover:border-teal hover:text-teal hover:bg-teal/5 transition-colors">
-                  <ExternalLink size={12} />{name}
-                </a>
-              ))}
+
+            {/* URL auto-fill */}
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={jdUrl}
+                  onChange={e => { setJdUrl(e.target.value); setJdUrlError(''); }}
+                  onKeyDown={e => e.key === 'Enter' && jdUrl.trim() && !jdUrlLoading && fetchJdFromUrl()}
+                  placeholder="https://www.indeed.com/viewjob?jk=… (paste a direct job URL)"
+                  className="flex-1 px-3 py-2 rounded-lg border border-border text-sm text-slate-700
+                             focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal transition-colors"
+                />
+                <button
+                  onClick={fetchJdFromUrl}
+                  disabled={!jdUrl.trim() || jdUrlLoading}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-teal text-white text-sm font-medium
+                             hover:bg-teal/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0">
+                  <Globe size={14} />
+                  {jdUrlLoading ? 'Fetching…' : 'Fetch JD'}
+                </button>
+              </div>
+              {jdUrlError && (
+                <div className="flex items-start gap-2 text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                  <AlertCircle size={13} className="shrink-0 mt-0.5" />{jdUrlError}
+                </div>
+              )}
+              <p className="text-xs text-muted">Works best with Indeed, Glassdoor, and Workopolis. LinkedIn blocks automated access — use copy-paste for those.</p>
+            </div>
+
+            {/* Portal links */}
+            <div>
+              <p className="text-xs font-medium text-navy mb-2">Or open a portal to browse:</p>
+              <div className="flex flex-wrap gap-2">
+                {PORTALS.map(({ name, url }) => (
+                  <a key={name} href={url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-slate-50
+                               text-xs font-medium text-slate-700 hover:border-teal hover:text-teal hover:bg-teal/5 transition-colors">
+                    <ExternalLink size={12} />{name}
+                  </a>
+                ))}
+              </div>
             </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-card p-5">
             <Textarea
               label="Job Description"
-              placeholder="Paste the job description here after copying from the portal…"
+              placeholder="Job description will appear here after fetching from URL, or paste it manually…"
               value={jd}
               onChange={saveJd}
               rows={18}
@@ -305,7 +320,7 @@ export default function AITools() {
             />
             {jd.trim().length > 50 && (
               <p className="text-xs text-teal mt-2">
-                ✓ Job description saved — switch to Resume or Cover Letter tab to generate.
+                ✓ Job description saved — switch to Resume, Cover Letter, or Interview Prep tab to generate.
               </p>
             )}
           </div>
@@ -468,6 +483,93 @@ export default function AITools() {
               </div>
               <pre className="whitespace-pre-wrap text-sm text-slate-700 leading-relaxed bg-slate-50 rounded-lg p-4 max-h-[500px] overflow-y-auto">
                 {clOut || ' '}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tab 3: Interview Prep ──────────────────────────────────────────── */}
+      {tab === 3 && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl shadow-card p-4">
+            <p className="text-xs text-muted">
+              <span className="font-semibold text-navy">How it works:</span> AI generates 5 behavioral questions with STAR-method talking points, 5 technical/role-specific questions with key points to cover, and 3 smart questions to ask your interviewer — all tailored to your resume and this specific job.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="bg-white rounded-xl shadow-card p-5">
+              <Textarea
+                label="Your Resume"
+                placeholder="Paste your resume or upload PDF/DOCX…"
+                value={resume}
+                onChange={setResume}
+                uploadable
+              />
+            </div>
+            <div className="bg-white rounded-xl shadow-card p-5">
+              <Textarea
+                label="Job Description"
+                placeholder="Add from Job Description tab, or paste directly…"
+                value={jd}
+                onChange={saveJd}
+                uploadable
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            {!ipLoading ? (
+              <button
+                onClick={() => runStream('/api/ai/interview-prep', setIpOut, setIpLoading, setIpError, ipAbort)}
+                disabled={!canGenerate}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-teal text-white text-sm font-semibold
+                           shadow-sm hover:bg-teal/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                <Brain size={16} />Generate Interview Prep
+              </button>
+            ) : (
+              <button onClick={() => ipAbort.current?.abort()}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-rose-500 text-white text-sm font-semibold hover:bg-rose-600 transition-all">
+                Stop
+              </button>
+            )}
+            {(ipOut || ipError) && (
+              <button onClick={() => { ipAbort.current?.abort(); setIpOut(''); setIpError(''); }}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border text-sm font-medium text-muted hover:text-navy hover:border-navy transition-colors">
+                <RotateCcw size={14} />Reset
+              </button>
+            )}
+            {ipLoading && <span className="text-sm text-muted animate-pulse">Building your prep guide…</span>}
+          </div>
+
+          {ipError && (
+            <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
+              <AlertCircle size={16} className="text-rose-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-rose-700">{ipError}</p>
+            </div>
+          )}
+
+          {(ipOut || ipLoading) && (
+            <div className="bg-white rounded-xl shadow-card p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-bold text-navy flex items-center gap-2">
+                  <Brain size={15} className="text-teal" />Interview Prep Guide
+                  {ipLoading && <span className="inline-block w-1.5 h-4 bg-teal animate-pulse rounded-sm ml-1" />}
+                </h2>
+                {ipOut && !ipLoading && (
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => copyText(ipOut, setIpCopied)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-muted hover:text-navy hover:border-navy transition-colors">
+                      {ipCopied ? <Check size={13} className="text-teal" /> : <Copy size={13} />}
+                      {ipCopied ? 'Copied!' : 'Copy'}
+                    </button>
+                    <DownloadMenu text={ipOut} filename="interview-prep" />
+                  </div>
+                )}
+              </div>
+              <pre className="whitespace-pre-wrap text-sm text-slate-700 leading-relaxed bg-slate-50 rounded-lg p-4 max-h-[700px] overflow-y-auto">
+                {ipOut || ' '}
               </pre>
             </div>
           )}

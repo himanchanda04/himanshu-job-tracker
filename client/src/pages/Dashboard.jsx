@@ -1,5 +1,6 @@
+import { Link } from 'react-router-dom';
 import {
-  Send, PhoneCall, Trophy, XCircle, Clock, Trash2, TrendingUp, Download,
+  Send, PhoneCall, Trophy, XCircle, Clock, Trash2, TrendingUp, Download, Bell,
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
@@ -10,10 +11,12 @@ import { useApplications } from '../hooks/useApplications';
 import { exportExcel }  from '../api/applications';
 import { STAT_CARD_COLORS, STATUS_STYLES } from '../design/colors';
 
+const FOLLOWUP_DAYS = 7;
+
 const PIE_ORDER = ['total', 'interview', 'offer', 'rejected', 'no_response', 'discarded'];
 
 export default function Dashboard() {
-  const { stats, loading } = useApplications();
+  const { stats, data, loading } = useApplications();
 
   if (loading) {
     return (
@@ -45,6 +48,16 @@ export default function Dashboard() {
   const responseRate = s.total
     ? Math.round(((s.interview + s.offer + s.rejected) / s.total) * 100)
     : 0;
+
+  const now = Date.now();
+  const followUpApps = (data?.data || [])
+    .filter(app => {
+      if (app.status !== 'Applied' && app.status !== 'No Response') return false;
+      if (app.auto_discarded) return false;
+      const lastUpdated = new Date(app.last_updated || app.applied_date || app.created_at).getTime();
+      return Math.floor((now - lastUpdated) / 86400000) >= FOLLOWUP_DAYS;
+    })
+    .sort((a, b) => new Date(a.last_updated || a.applied_date) - new Date(b.last_updated || b.applied_date));
 
   return (
     <div className="space-y-6">
@@ -169,6 +182,48 @@ export default function Dashboard() {
           {(s.interview ?? 0) + (s.offer ?? 0) + (s.rejected ?? 0)} responses out of {s.total ?? 0} applications
         </p>
       </div>
+
+      {/* ── Follow-up reminders ── */}
+      {followUpApps.length > 0 && (
+        <div className="bg-white rounded-xl p-5 shadow-card border-l-4 border-amber-400">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-navy flex items-center gap-2">
+              <Bell size={16} className="text-amber-500" />
+              Follow-up Needed
+              <span className="ml-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">
+                {followUpApps.length}
+              </span>
+            </h2>
+            <Link to="/applications" className="text-xs text-teal hover:text-teal/80 font-medium transition-colors">
+              View all →
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {followUpApps.slice(0, 5).map(app => {
+              const lastUpdated = new Date(app.last_updated || app.applied_date || app.created_at);
+              const days = Math.floor((now - lastUpdated.getTime()) / 86400000);
+              return (
+                <div key={app.id} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-navy truncate">{app.company}</p>
+                    <p className="text-xs text-muted truncate">{app.role}</p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0 ml-3">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium
+                      ${app.status === 'Applied' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+                      {app.status}
+                    </span>
+                    <span className="text-xs text-amber-600 font-medium whitespace-nowrap">{days}d ago</span>
+                  </div>
+                </div>
+              );
+            })}
+            {followUpApps.length > 5 && (
+              <p className="text-xs text-muted pt-1">+{followUpApps.length - 5} more — <Link to="/applications" className="text-teal hover:underline">view all</Link></p>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   );
