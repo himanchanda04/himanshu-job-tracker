@@ -1,7 +1,35 @@
 import { Router }    from 'express';
 import Anthropic      from '@anthropic-ai/sdk';
+import multer         from 'multer';
+import pdfParse       from 'pdf-parse/lib/pdf-parse.js';
+import mammoth        from 'mammoth';
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+// POST /api/ai/parse  — extract text from uploaded PDF or DOCX
+router.post('/parse', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+  const { mimetype, buffer, originalname } = req.file;
+  try {
+    let text = '';
+    if (mimetype === 'application/pdf' || originalname.endsWith('.pdf')) {
+      const data = await pdfParse(buffer);
+      text = data.text;
+    } else if (
+      mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      originalname.endsWith('.docx')
+    ) {
+      const result = await mammoth.extractRawText({ buffer });
+      text = result.value;
+    } else {
+      text = buffer.toString('utf8');
+    }
+    res.json({ text: text.trim() });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to parse file: ' + err.message });
+  }
+});
 
 function getClient() {
   return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
