@@ -4,6 +4,7 @@ import multer         from 'multer';
 import pdfParse       from 'pdf-parse/lib/pdf-parse.js';
 import mammoth        from 'mammoth';
 import { authenticate } from '../middleware/auth.js';
+import pool           from '../db/database.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -36,29 +37,26 @@ function getClient() {
   return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 }
 
-const RECRUITER_SYSTEM = `You are a senior Canadian recruiter and ATS specialist with 15+ years of experience hiring at top companies including RBC, TD Bank, Shopify, Bell, Rogers, City of Winnipeg, Government of Canada, and Fortune 500 firms operating in Canada. You have reviewed over 50,000 resumes and know exactly what passes Workday, Taleo, iCIMS, and Greenhouse ATS systems used by Canadian employers. You produce only what is asked — no preamble, no meta-commentary, no markdown fences.`;
+const RECRUITER_SYSTEM = `You are a senior Canadian ATS recruiter. You produce only what is asked — no preamble, no commentary, no markdown fences.`;
 
 const CANADA_RESUME_RULES = `
-CANADA ATS RESUME RULES — FOLLOW ALL OF THESE WITHOUT EXCEPTION:
-
-FORMATTING (ATS-critical):
-- Single column layout only. No tables, no text boxes, no columns, no headers/footers.
-- Section headers in ALL CAPS on their own line: PROFESSIONAL SUMMARY, CORE COMPETENCIES, PROFESSIONAL EXPERIENCE, EDUCATION, CERTIFICATIONS
-- Each bullet starts with a strong action verb. One line per bullet ideally (max 2 lines).
-- Consistent date format: Month YYYY – Month YYYY (e.g. September 2022 – Present)
-- No photos, no DOB, no gender, no SIN, no marital status (illegal to request in Canada).
-- No graphics, no icons, no colour formatting — plain text only.
-- Spacing: one blank line between sections, no extra blank lines within sections.
-- Phone: Canadian format (204-xxx-xxxx or +1-204-xxx-xxxx). City, Province only (no full address).
-
-CONTENT (interview-call quality):
-- Professional summary: 3 sentences. Sentence 1 = who you are + years of experience. Sentence 2 = 2-3 top skills that match the JD. Sentence 3 = what you deliver for employers.
-- Bullets: every bullet must have a metric or outcome. If no number exists, add a realistic qualifier (e.g. "streamlined process reducing manual effort by ~40%").
-- Mirror exact keywords from the JD — ATS scores keyword matches. Do not paraphrase keywords.
-- Skills section: list tools/technologies/certifications as comma-separated values, grouped by category.
-- Remove any role or experience that is completely irrelevant to this job.
-- Canadian spelling: "programme", "colour", "analyse", "organization" — match standard Canadian English.
+CANADA ATS RULES:
+- Single column, plain text only. No tables, boxes, graphics, headers/footers.
+- Section headers ALL CAPS: PROFESSIONAL SUMMARY, CORE COMPETENCIES, PROFESSIONAL EXPERIENCE, EDUCATION, CERTIFICATIONS
+- Bullets start with action verb, include metric or outcome.
+- Dates: Month YYYY – Month YYYY. City, Province only. No photos/DOB/SIN/gender.
+- Summary: 3 sentences (who you are + experience | top skills matching JD | value delivered).
+- Mirror exact JD keywords. Skills: comma-separated by category. Canadian spelling.
 `;
+
+function stripHtml(html) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
 
 function sseStream(res) {
   res.setHeader('Content-Type',  'text/event-stream');
@@ -88,16 +86,14 @@ router.post('/resume', authenticate, async (req, res) => {
       system:     RECRUITER_SYSTEM,
       messages: [{
         role: 'user',
-        content: `Rewrite and fully optimize this resume for the job description below. This resume must be good enough to get the candidate an interview call at a Canadian company.
+        content: `Rewrite this resume for the job below. Output ONLY the complete resume text.
 
 ${CANADA_RESUME_RULES}
 
-Output ONLY the complete optimized resume text. No explanations. No commentary. No markdown code fences. No placeholders.
-
-─── JOB DESCRIPTION ───────────────────────────────────────────
+JOB:
 ${jobDescription.trim()}
 
-─── CURRENT RESUME ─────────────────────────────────────────────
+RESUME:
 ${resume.trim()}`,
       }],
     });
@@ -123,25 +119,16 @@ router.post('/cover-letter', authenticate, async (req, res) => {
       system:     RECRUITER_SYSTEM,
       messages: [{
         role: 'user',
-        content: `Write a compelling, professional cover letter for a Canadian job application. Extract the hiring manager name and company name directly from the job description — never use placeholders like [Company Name] or [Hiring Manager].
+        content: `Write a professional Canadian cover letter. No placeholders — extract company, role, and candidate name directly from the inputs.
 
-RULES:
-1. Extract company name and job title from the JD and use them explicitly in the letter.
-2. If no hiring manager name is found, address it to "Hiring Manager" — not a placeholder.
-3. Opening line: specific and confident — never "I am writing to apply" or "I am excited to apply".
-4. Paragraph 1 (2-3 sentences): Who the candidate is + one standout achievement from their resume that maps directly to the JD.
-5. Paragraph 2 (3-4 sentences): 2-3 concrete skills or results that address the top requirements in the JD.
-6. Paragraph 3 (2 sentences): Genuine interest in this role/company + confident call to action.
-7. Closing: "Sincerely," then the candidate's name (extracted from resume).
-8. Total: under 300 words. Formal Canadian professional tone. No filler phrases. No hollow enthusiasm.
-9. Do NOT use any square brackets anywhere in the letter. Every field must be filled from the resume and JD.
+RULES: Confident opening (not "I am writing to apply"). Para 1: who candidate is + one achievement matching JD. Para 2: 2-3 skills/results for top JD requirements. Para 3: interest + call to action. Close: "Sincerely," + candidate name. Under 300 words. No square brackets anywhere.
 
-Output ONLY the cover letter. No explanations. No commentary. No markdown fences.
+Output ONLY the cover letter.
 
-─── JOB DESCRIPTION ───────────────────────────────────────────
+JOB:
 ${jobDescription.trim()}
 
-─── RESUME ─────────────────────────────────────────────────────
+RESUME:
 ${resume.trim()}`,
       }],
     });
@@ -181,13 +168,14 @@ router.post('/scrape-jd', authenticate, async (req, res) => {
       return res.status(400).json({ error: `Could not load page (HTTP ${pageRes.status}). This site may require login or block automated access — try copying the text manually.` });
 
     const html = await pageRes.text();
+    const pageText = stripHtml(html);
     const client = getClient();
     const msg = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 2000,
       messages: [{
         role: 'user',
-        content: `Extract the job description from this HTML page. Return ONLY the job posting content: job title, company name, location, salary (if shown), responsibilities, requirements, and qualifications. No HTML tags, no navigation, no headers, no footers, no ads. Plain text only.\n\nIf this page does not contain a job posting, reply with exactly: NONE\n\nHTML:\n${html.slice(0, 80000)}`,
+        content: `Extract the job description from this page. Return ONLY the job posting content: job title, company name, location, salary (if shown), responsibilities, requirements, and qualifications. Plain text only.\n\nIf this page does not contain a job posting, reply with exactly: NONE\n\nPAGE TEXT:\n${pageText.slice(0, 30000)}`,
       }],
     });
     const text = msg.content[0].text.trim();
@@ -213,7 +201,6 @@ router.post('/job-match', authenticate, async (req, res) => {
     return res.status(503).json({ error: 'ANTHROPIC_API_KEY is not configured.' });
 
   // Pull original_resume from DB
-  const pool = (await import('../db/database.js')).default;
   const result = await pool.query('SELECT original_resume FROM users WHERE id = $1', [req.user.id]);
   const originalResume = result.rows[0]?.original_resume?.trim();
 
@@ -221,6 +208,7 @@ router.post('/job-match', authenticate, async (req, res) => {
     return res.status(400).json({ error: 'No base resume found. Please upload your resume in Settings → My Resume first.' });
 
   const sse = sseStream(res);
+  sse.send(JSON.stringify({ type: 'status', text: 'Analysing match…' }));
 
   try {
     const client = getClient();
@@ -281,16 +269,14 @@ ${originalResume.slice(0, 4000)}`,
       system:     RECRUITER_SYSTEM,
       messages: [{
         role: 'user',
-        content: `Rewrite and fully optimize this resume for the job description below. This resume must be good enough to get the candidate an interview call at a Canadian company.
+        content: `Rewrite this resume for the job below. Output ONLY the complete resume text.
 
 ${CANADA_RESUME_RULES}
 
-Output ONLY the complete optimized resume text. No explanations. No commentary. No markdown code fences. No placeholders.
-
-─── JOB DESCRIPTION ───────────────────────────────────────────
+JOB:
 ${jobDescription.trim()}
 
-─── CURRENT RESUME ─────────────────────────────────────────────
+RESUME:
 ${originalResume}`,
       }],
     });
@@ -312,25 +298,16 @@ ${originalResume}`,
       system:     RECRUITER_SYSTEM,
       messages: [{
         role: 'user',
-        content: `Write a compelling, professional cover letter for a Canadian job application. Extract the hiring manager name and company name directly from the job description — never use placeholders like [Company Name] or [Hiring Manager].
+        content: `Write a professional Canadian cover letter. No placeholders — extract company, role, and candidate name directly from the inputs.
 
-RULES:
-1. Extract company name and job title from the JD and use them explicitly in the letter.
-2. If no hiring manager name is found, address it to "Hiring Manager" — not a placeholder.
-3. Opening line: specific and confident — never "I am writing to apply" or "I am excited to apply".
-4. Paragraph 1 (2-3 sentences): Who the candidate is + one standout achievement that maps directly to the JD.
-5. Paragraph 2 (3-4 sentences): 2-3 concrete skills or results addressing the top JD requirements.
-6. Paragraph 3 (2 sentences): Genuine interest + confident call to action.
-7. Closing: "Sincerely," then the candidate's name (from resume).
-8. Under 300 words. Formal Canadian professional tone. No hollow phrases.
-9. Do NOT use square brackets anywhere. Every field filled from resume and JD.
+RULES: Confident opening (not "I am writing to apply"). Para 1: who candidate is + one achievement matching JD. Para 2: 2-3 skills/results for top JD requirements. Para 3: interest + call to action. Close: "Sincerely," + candidate name. Under 300 words. No square brackets anywhere.
 
-Output ONLY the cover letter. No explanations. No markdown fences.
+Output ONLY the cover letter.
 
-─── JOB DESCRIPTION ───────────────────────────────────────────
+JOB:
 ${jobDescription.trim()}
 
-─── RESUME ─────────────────────────────────────────────────────
+RESUME:
 ${originalResume}`,
       }],
     });
@@ -362,24 +339,21 @@ router.post('/interview-prep', authenticate, async (req, res) => {
       system: RECRUITER_SYSTEM,
       messages: [{
         role: 'user',
-        content: `Create a focused interview preparation guide for this candidate applying to this role.
+        content: `Create an interview prep guide. Output ONLY the guide — no preamble.
 
-## BEHAVIORAL QUESTIONS (5 questions)
-For each: write the question, then "Talking Point:" — a 2-3 sentence STAR-method answer using real details from the candidate's resume.
+## BEHAVIORAL QUESTIONS (5)
+Each: question + "Talking Point:" (2-3 sentence STAR answer using resume details).
 
-## TECHNICAL / ROLE-SPECIFIC QUESTIONS (5 questions)
-For each: write the question, then "Key Points:" — the 2-3 most important things to cover, grounded in the JD requirements.
+## TECHNICAL QUESTIONS (5)
+Each: question + "Key Points:" (2-3 things to cover from the JD).
 
-## QUESTIONS TO ASK THE INTERVIEWER (3 questions)
-Smart, specific questions that show genuine research into this role and company.
+## QUESTIONS TO ASK (3)
+Specific, research-based questions about this role/company.
 
-Be specific — reference actual details from the resume and job description. No generic advice.
-Output ONLY the guide — no preamble, no commentary.
-
-─── JOB DESCRIPTION ───────────────────────────────────────────
+JOB:
 ${jobDescription.trim()}
 
-─── RESUME ─────────────────────────────────────────────────────
+RESUME:
 ${resume.trim()}`,
       }],
     });
