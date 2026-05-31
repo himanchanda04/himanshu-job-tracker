@@ -80,9 +80,16 @@ All endpoints require JWT auth (`authenticate` middleware).
 | `/api/ai/interview-prep` | POST JSON | Stream interview prep guide via SSE |
 | `/api/ai/job-match` | POST JSON `{ jobDescription, generateFull }` | Score match + optional full generation (resume + CL) |
 
+### `sseStream` helper methods
+- `send(text)` — wraps in `{ text }` (used by resume/CL/interview-prep streams)
+- `typed(obj)` — writes raw JSON object (used by ALL job-match events — do NOT use `send` for typed events)
+- `done()` — sends `[DONE]` and closes
+- `error(msg)` — sends `{ error: msg }` and closes
+
 ### `/api/ai/job-match` flow (cost-optimised)
 1. Pulls `original_resume` from DB for the authenticated user
 2. **Step 1** (always): Haiku scores match → returns JSON `{ score, category, matched_keywords, missing_keywords, top_strength, top_gap }` as SSE `{ type: 'score', data: {...} }`
+   - Haiku may wrap response in markdown fences — strip with regex before `JSON.parse()`
 3. **Step 2** (only if `generateFull: true`): Sonnet streams tailored resume then cover letter
    - Resume chunks: `{ type: 'resume_chunk', text }`
    - Resume done: `{ type: 'resume_done' }`
@@ -132,6 +139,11 @@ All endpoints require JWT auth (`authenticate` middleware).
 | Server crash on startup | Wrapped `new Anthropic()` in `getClient()` inside request handlers |
 | ANTHROPIC_API_KEY not found | Separate env var from JWT_SECRET in Render dashboard |
 | Client calling localhost (CORS) | `client/.env.local` sets `VITE_API_URL` to Render URL |
+| Job match score never appeared | `sseStream.send()` double-wraps payload in `{text:...}`. Added `typed(obj)` method that writes raw JSON. All 8 job-match SSE events now use `sse.typed()` |
+| Score parsing failed error | Haiku wraps JSON in ` ```json ``` ` fences. Strip fences + extract `{...}` with regex before `JSON.parse()` |
+| Error messages hidden in Job Match | `matchError` was nested inside `{matchScore && ...}`. Moved outside so errors show even when score is null |
+| "Go to Settings" link wrong tab | Was calling `setTab(4)` (Interview Prep). Fixed to `navigate('/settings')` via `useNavigate` |
+| Slow URL fetch + scoring | Full raw HTML (80k chars) was sent to Haiku. Added `stripHtml()` + slice to 30k chars. Also replaced dynamic `await import()` of pool with static top-level import |
 
 ---
 
