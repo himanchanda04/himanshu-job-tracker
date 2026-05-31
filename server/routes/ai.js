@@ -248,7 +248,10 @@ ${originalResume.slice(0, 4000)}`,
 
     let scoreData;
     try {
-      const raw = scoreMsg.content[0].text.trim();
+      let raw = scoreMsg.content[0].text.trim();
+      raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (match) raw = match[0];
       scoreData = JSON.parse(raw);
     } catch {
       return sse.error('Score parsing failed — please try again.');
