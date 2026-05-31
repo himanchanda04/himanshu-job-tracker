@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Briefcase, FileText, Mail, Brain, Sparkles, Copy, Check,
   RotateCcw, AlertCircle, Upload, Download, ChevronDown, ExternalLink,
@@ -196,6 +197,7 @@ const TABS = [
 ];
 
 export default function AITools() {
+  const navigate = useNavigate();
   const [tab, setTab]       = useState(0);
   const [resume, setResume] = useState('');
   const [jd, setJd]         = useState('');
@@ -531,7 +533,7 @@ export default function AITools() {
               <AlertTriangle size={16} className="text-amber-500 mt-0.5 shrink-0" />
               <p className="text-sm text-amber-700">
                 You haven't saved your base resume yet.{' '}
-                <button onClick={() => setTab(4)} className="underline font-semibold">Go to Settings</button>{' '}
+                <button onClick={() => navigate('/settings')} className="underline font-semibold">Go to Settings</button>{' '}
                 to upload it once — then every job match will be scored against it automatically.
               </p>
             </div>
@@ -592,6 +594,13 @@ export default function AITools() {
               {matchScoring && <span className="text-xs text-muted animate-pulse">Analysing match…</span>}
             </div>
           </div>
+
+          {matchError && (
+            <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
+              <AlertCircle size={16} className="text-rose-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-rose-700">{matchError}</p>
+            </div>
+          )}
 
           {/* Score result */}
           {matchScore && (
@@ -664,13 +673,6 @@ export default function AITools() {
                     className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500 text-white text-xs font-medium hover:bg-rose-600 transition-all">
                     Stop
                   </button>
-                </div>
-              )}
-
-              {matchError && (
-                <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
-                  <AlertCircle size={16} className="text-rose-500 mt-0.5 shrink-0" />
-                  <p className="text-sm text-rose-700">{matchError}</p>
                 </div>
               )}
 
