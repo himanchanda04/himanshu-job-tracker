@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Briefcase, FileText, Mail, Brain, Sparkles, Copy, Check,
-  RotateCcw, AlertCircle, Upload, Download, ChevronDown, ExternalLink, Globe,
+  RotateCcw, AlertCircle, Upload, Download, ChevronDown, ExternalLink,
+  Globe, Target, TrendingUp, XCircle, CheckCircle, AlertTriangle, Zap,
 } from 'lucide-react';
 import { api } from '../api/applications';
 import jsPDF from 'jspdf';
@@ -10,13 +11,13 @@ import { Document, Packer, Paragraph, TextRun } from 'docx';
 const BASE = import.meta.env.VITE_API_URL || '';
 
 const PORTALS = [
-  { name: 'LinkedIn',    url: 'https://www.linkedin.com/jobs/' },
-  { name: 'Indeed',      url: 'https://ca.indeed.com/' },
-  { name: 'Glassdoor',   url: 'https://www.glassdoor.ca/Job/index.htm' },
-  { name: 'Google Jobs', url: 'https://www.google.com/search?q=software+jobs+near+me&ibp=htl;jobs' },
-  { name: 'Workopolis',  url: 'https://www.workopolis.com/' },
-  { name: 'Monster',     url: 'https://www.monster.ca/' },
-  { name: 'ZipRecruiter',url: 'https://www.ziprecruiter.com/' },
+  { name: 'LinkedIn',     url: 'https://www.linkedin.com/jobs/' },
+  { name: 'Indeed',       url: 'https://ca.indeed.com/' },
+  { name: 'Glassdoor',    url: 'https://www.glassdoor.ca/Job/index.htm' },
+  { name: 'Google Jobs',  url: 'https://www.google.com/search?q=jobs+canada&ibp=htl;jobs' },
+  { name: 'Workopolis',   url: 'https://www.workopolis.com/' },
+  { name: 'Monster',      url: 'https://www.monster.ca/' },
+  { name: 'ZipRecruiter', url: 'https://www.ziprecruiter.com/' },
 ];
 
 async function parseFile(file) {
@@ -33,8 +34,7 @@ async function parseFile(file) {
     try { const d = await res.json(); msg = d.error || msg; } catch {}
     throw new Error(msg);
   }
-  const data = await res.json();
-  return data.text;
+  return (await res.json()).text;
 }
 
 function UploadButton({ onText }) {
@@ -122,8 +122,74 @@ function Textarea({ label, value, onChange, placeholder, rows = 13, uploadable =
   );
 }
 
+// ── Score Badge ──────────────────────────────────────────────────────────────
+function ScoreBadge({ score, category }) {
+  const configs = {
+    not_for_you: {
+      bg: 'bg-rose-50', border: 'border-rose-300', text: 'text-rose-700',
+      ring: 'text-rose-500', icon: XCircle,
+      label: 'Not For You',
+      desc: 'Your profile does not match enough requirements for this role. Applying would likely be filtered out by ATS.',
+    },
+    consider: {
+      bg: 'bg-amber-50', border: 'border-amber-300', text: 'text-amber-700',
+      ring: 'text-amber-500', icon: AlertTriangle,
+      label: 'Consider Carefully',
+      desc: 'Partial match. You meet some requirements but have notable gaps. Apply if you can address the gaps in your cover letter.',
+    },
+    good_for_you: {
+      bg: 'bg-teal-50', border: 'border-teal-300', text: 'text-teal-700',
+      ring: 'text-teal-600', icon: CheckCircle,
+      label: 'Good For You',
+      desc: 'Strong match. You meet most key requirements. A well-optimized resume should get you past ATS screening.',
+    },
+    perfect: {
+      bg: 'bg-emerald-50', border: 'border-emerald-300', text: 'text-emerald-700',
+      ring: 'text-emerald-600', icon: Zap,
+      label: 'This Is Perfect For You',
+      desc: 'Excellent match. Your background aligns very strongly with this role. High probability of getting an interview call.',
+    },
+  };
+  const c = configs[category] || configs.consider;
+  const Icon = c.icon;
+  const radius = 40;
+  const circ = 2 * Math.PI * radius;
+  const dash = (score / 100) * circ;
+
+  return (
+    <div className={`rounded-xl border ${c.bg} ${c.border} p-5 flex items-center gap-5`}>
+      {/* Circular progress */}
+      <div className="relative shrink-0 w-24 h-24">
+        <svg className="w-24 h-24 -rotate-90" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r={radius} fill="none" stroke="#e2e8f0" strokeWidth="10" />
+          <circle cx="50" cy="50" r={radius} fill="none"
+            stroke={category === 'not_for_you' ? '#f43f5e' : category === 'consider' ? '#f59e0b' : category === 'good_for_you' ? '#14b8a6' : '#10b981'}
+            strokeWidth="10" strokeLinecap="round"
+            strokeDasharray={`${dash} ${circ}`}
+            style={{ transition: 'stroke-dasharray 0.8s ease' }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className={`text-2xl font-bold ${c.text}`}>{score}%</span>
+          <span className="text-xs text-muted">match</span>
+        </div>
+      </div>
+      {/* Text */}
+      <div className="flex-1 min-w-0">
+        <div className={`flex items-center gap-2 mb-1`}>
+          <Icon size={18} className={c.ring} />
+          <span className={`font-bold text-base ${c.text}`}>{c.label}</span>
+        </div>
+        <p className="text-xs text-slate-600 leading-relaxed">{c.desc}</p>
+      </div>
+    </div>
+  );
+}
+
+// ── TABS ─────────────────────────────────────────────────────────────────────
 const TABS = [
   { label: 'Job Description', icon: Briefcase },
+  { label: 'Job Match',       icon: Target    },
   { label: 'Resume',          icon: FileText  },
   { label: 'Cover Letter',    icon: Mail      },
   { label: 'Interview Prep',  icon: Brain     },
@@ -134,7 +200,7 @@ export default function AITools() {
   const [resume, setResume] = useState('');
   const [jd, setJd]         = useState('');
 
-  // URL scraper state
+  // URL scraper
   const [jdUrl,        setJdUrl]        = useState('');
   const [jdUrlLoading, setJdUrlLoading] = useState(false);
   const [jdUrlError,   setJdUrlError]   = useState('');
@@ -160,42 +226,52 @@ export default function AITools() {
   const [ipCopied,  setIpCopied]  = useState(false);
   const ipAbort = useRef(null);
 
+  // Job Match tab
+  const [matchJd,        setMatchJd]        = useState('');
+  const [matchJdUrl,     setMatchJdUrl]      = useState('');
+  const [matchUrlLoading,setMatchUrlLoading] = useState(false);
+  const [matchUrlError,  setMatchUrlError]   = useState('');
+  const [matchScore,     setMatchScore]      = useState(null);   // { score, category, matched_keywords, missing_keywords, top_strength, top_gap }
+  const [matchScoring,   setMatchScoring]    = useState(false);
+  const [matchResumeOut, setMatchResumeOut]  = useState('');
+  const [matchClOut,     setMatchClOut]      = useState('');
+  const [matchGenLoading,setMatchGenLoading] = useState(false);
+  const [matchStatus,    setMatchStatus]     = useState('');
+  const [matchError,     setMatchError]      = useState('');
+  const [matchResumeCopied, setMatchResumeCopied] = useState(false);
+  const [matchClCopied,     setMatchClCopied]     = useState(false);
+  const matchAbort = useRef(null);
+
+  const [hasOriginalResume, setHasOriginalResume] = useState(false);
+
   useEffect(() => {
-    api.get('/auth/me')
-      .then(r => { if (r.data.user.last_resume) setResume(r.data.user.last_resume); })
-      .catch(() => {});
+    api.get('/auth/me').then(r => {
+      if (r.data.user.last_resume)     setResume(r.data.user.last_resume);
+      if (r.data.user.original_resume) setHasOriginalResume(true);
+    }).catch(() => {});
     const saved = localStorage.getItem('last_jd');
     if (saved) setJd(saved);
   }, []);
 
-  function saveJd(val) {
-    setJd(val);
-    localStorage.setItem('last_jd', val);
-  }
+  function saveJd(val) { setJd(val); localStorage.setItem('last_jd', val); }
 
-  async function fetchJdFromUrl() {
-    setJdUrlError('');
-    setJdUrlLoading(true);
+  async function fetchJd(url, setJdFn, setLoadingFn, setErrorFn) {
+    setErrorFn(''); setLoadingFn(true);
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${BASE}/api/ai/scrape-jd`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ url: jdUrl.trim() }),
+        body: JSON.stringify({ url: url.trim() }),
       });
       if (!res.ok) {
-        let msg = `Server error (${res.status}) — the backend may still be deploying, try again in 30s`;
+        let msg = `Server error (${res.status})`;
         try { const d = await res.json(); msg = d.error || msg; } catch {}
         throw new Error(msg);
       }
-      const data = await res.json();
-      saveJd(data.text);
-      setJdUrl('');
-    } catch (err) {
-      setJdUrlError(err.message);
-    } finally {
-      setJdUrlLoading(false);
-    }
+      setJdFn((await res.json()).text);
+    } catch (err) { setErrorFn(err.message); }
+    finally { setLoadingFn(false); }
   }
 
   async function runStream(endpoint, setOut, setLoading, setError, abortRef) {
@@ -223,11 +299,51 @@ export default function AITools() {
             const { text, error: e } = JSON.parse(p);
             if (e) throw new Error(e);
             if (text) setOut(x => x + text);
-          } catch { /* skip malformed SSE lines */ }
+          } catch { /* skip malformed */ }
         }
       }
     } catch (err) { if (err.name !== 'AbortError') setError(err.message); }
     finally { setLoading(false); abortRef.current = null; }
+  }
+
+  // Job Match — score only first, then full generation
+  async function runJobMatch(generateFull = false) {
+    if (generateFull) {
+      setMatchGenLoading(true); setMatchStatus(''); setMatchResumeOut(''); setMatchClOut(''); setMatchError('');
+    } else {
+      setMatchScoring(true); setMatchScore(null); setMatchError('');
+      setMatchResumeOut(''); setMatchClOut('');
+    }
+    const token = localStorage.getItem('token');
+    const ctrl = new AbortController(); matchAbort.current = ctrl;
+    try {
+      const res = await fetch(`${BASE}/api/ai/job-match`, {
+        method: 'POST', signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ jobDescription: matchJd.trim(), generateFull }),
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || `Error ${res.status}`); }
+
+      const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = '';
+      while (true) {
+        const { done, value } = await reader.read(); if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n'); buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const p = line.slice(6).trim(); if (p === '[DONE]') break;
+          try {
+            const msg = JSON.parse(p);
+            if (msg.error) throw new Error(msg.error);
+            if (msg.type === 'score') { setMatchScore(msg.data); setMatchScoring(false); }
+            if (msg.type === 'status') setMatchStatus(msg.text);
+            if (msg.type === 'resume_chunk') setMatchResumeOut(x => x + msg.text);
+            if (msg.type === 'cl_chunk')     setMatchClOut(x => x + msg.text);
+          } catch (e) { if (e.message) throw e; }
+        }
+      }
+    } catch (err) { if (err.name !== 'AbortError') setMatchError(err.message); }
+    finally { setMatchScoring(false); setMatchGenLoading(false); matchAbort.current = null; }
   }
 
   const canGenerate = resume.trim().length > 50 && jd.trim().length > 50;
@@ -237,15 +353,11 @@ export default function AITools() {
     runStream('/api/ai/resume',       setResumeOut, setResumeLoading, setResumeError, resumeAbort);
     runStream('/api/ai/cover-letter', setClOut,     setClLoading,     setClError,     clAbort);
   }
-  function stopAll() {
-    resumeAbort.current?.abort();
-    clAbort.current?.abort();
-  }
+  function stopAll() { resumeAbort.current?.abort(); clAbort.current?.abort(); }
 
   async function copyText(text, setCopied) {
     await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopied(true); setTimeout(() => setCopied(false), 2000);
   }
 
   return (
@@ -255,7 +367,7 @@ export default function AITools() {
           <Sparkles size={22} className="text-teal" />AI Career Tools
         </h1>
         <p className="text-sm text-muted mt-1">
-          Find jobs → paste description → optimize your resume, cover letter, and interview prep.
+          Find jobs → paste description → score match → generate optimized resume and cover letter.
         </p>
       </div>
 
@@ -276,28 +388,20 @@ export default function AITools() {
           <div className="bg-white rounded-xl shadow-card p-5 space-y-4">
             <div>
               <h2 className="text-sm font-bold text-navy">Find a Job Posting</h2>
-              <p className="text-xs text-muted mt-0.5">Paste a direct job posting URL to auto-fill the description, or open a portal to browse jobs.</p>
+              <p className="text-xs text-muted mt-0.5">Paste a direct job posting URL to auto-fill, or open a portal to browse.</p>
             </div>
-
-            {/* URL auto-fill */}
             <div className="space-y-2">
               <div className="flex gap-2">
-                <input
-                  type="url"
-                  value={jdUrl}
-                  onChange={e => { setJdUrl(e.target.value); setJdUrlError(''); }}
-                  onKeyDown={e => e.key === 'Enter' && jdUrl.trim() && !jdUrlLoading && fetchJdFromUrl()}
-                  placeholder="https://www.indeed.com/viewjob?jk=… (paste a direct job URL)"
+                <input type="url" value={jdUrl} onChange={e => { setJdUrl(e.target.value); setJdUrlError(''); }}
+                  onKeyDown={e => e.key === 'Enter' && jdUrl.trim() && !jdUrlLoading && fetchJd(jdUrl, saveJd, setJdUrlLoading, setJdUrlError)}
+                  placeholder="https://ca.indeed.com/viewjob?jk=… (paste a direct job URL)"
                   className="flex-1 px-3 py-2 rounded-lg border border-border text-sm text-slate-700
-                             focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal transition-colors"
-                />
-                <button
-                  onClick={fetchJdFromUrl}
+                             focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal transition-colors" />
+                <button onClick={() => fetchJd(jdUrl, saveJd, setJdUrlLoading, setJdUrlError)}
                   disabled={!jdUrl.trim() || jdUrlLoading}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-teal text-white text-sm font-medium
                              hover:bg-teal/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0">
-                  <Globe size={14} />
-                  {jdUrlLoading ? 'Fetching…' : 'Fetch JD'}
+                  <Globe size={14} />{jdUrlLoading ? 'Fetching…' : 'Fetch JD'}
                 </button>
               </div>
               {jdUrlError && (
@@ -305,12 +409,10 @@ export default function AITools() {
                   <AlertCircle size={13} className="shrink-0 mt-0.5" />{jdUrlError}
                 </div>
               )}
-              <p className="text-xs text-muted">Works best with Indeed, Glassdoor, and Workopolis. LinkedIn blocks automated access — use copy-paste for those.</p>
+              <p className="text-xs text-muted">Works best with Indeed, Glassdoor, Workopolis. LinkedIn blocks scraping — paste text manually.</p>
             </div>
-
-            {/* Portal links */}
             <div>
-              <p className="text-xs font-medium text-navy mb-2">Or open a portal to browse:</p>
+              <p className="text-xs font-medium text-navy mb-2">Or open a portal:</p>
               <div className="flex flex-wrap gap-2">
                 {PORTALS.map(({ name, url }) => (
                   <a key={name} href={url} target="_blank" rel="noopener noreferrer"
@@ -324,17 +426,11 @@ export default function AITools() {
           </div>
 
           <div className="bg-white rounded-xl shadow-card p-5">
-            <Textarea
-              label="Job Description"
-              placeholder="Job description will appear here after fetching from URL, or paste it manually…"
-              value={jd}
-              onChange={saveJd}
-              rows={jd.trim().length > 50 ? 10 : 18}
-              uploadable
-            />
+            <Textarea label="Job Description"
+              placeholder="Job description will appear here after fetching, or paste manually…"
+              value={jd} onChange={saveJd} rows={jd.trim().length > 50 ? 10 : 18} uploadable />
           </div>
 
-          {/* ── Quick Generate panel — appears once JD is filled ── */}
           {jd.trim().length > 50 && (
             <div className="bg-white rounded-xl shadow-card p-5 space-y-4 border-t-2 border-teal/30">
               <div className="flex items-center justify-between">
@@ -342,9 +438,7 @@ export default function AITools() {
                   <h2 className="text-sm font-bold text-navy flex items-center gap-2">
                     <Sparkles size={16} className="text-teal" />Generate with AI
                   </h2>
-                  <p className="text-xs text-muted mt-0.5">
-                    Your saved resume is pre-loaded. One click to get an optimized resume + cover letter.
-                  </p>
+                  <p className="text-xs text-muted mt-0.5">Your saved resume is pre-loaded. One click for optimized resume + cover letter.</p>
                 </div>
                 {canGenerate && !anyLoading && (resumeOut || clOut) && (
                   <button onClick={() => { setResumeOut(''); setClOut(''); setResumeError(''); setClError(''); }}
@@ -353,21 +447,11 @@ export default function AITools() {
                   </button>
                 )}
               </div>
-
-              <Textarea
-                label="Your Resume"
-                placeholder="Your resume auto-loads from last save — or paste / upload a new one…"
-                value={resume}
-                onChange={setResume}
-                rows={7}
-                uploadable
-              />
-
+              <Textarea label="Your Resume" placeholder="Your resume auto-loads from last save — or paste/upload…"
+                value={resume} onChange={setResume} rows={7} uploadable />
               <div className="flex items-center gap-3 flex-wrap">
                 {!anyLoading ? (
-                  <button
-                    onClick={generateAll}
-                    disabled={!canGenerate}
+                  <button onClick={generateAll} disabled={!canGenerate}
                     className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-teal text-white text-sm font-semibold
                                shadow-sm hover:bg-teal/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
                     <Sparkles size={16} />Optimize Resume + Cover Letter
@@ -381,18 +465,14 @@ export default function AITools() {
                 {resumeLoading && <span className="text-xs text-muted animate-pulse">Optimizing resume…</span>}
                 {clLoading     && <span className="text-xs text-muted animate-pulse ml-2">Writing cover letter…</span>}
               </div>
-
               {(resumeError || clError) && (
                 <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
                   <AlertCircle size={16} className="text-rose-500 mt-0.5 shrink-0" />
                   <p className="text-sm text-rose-700">{resumeError || clError}</p>
                 </div>
               )}
-
               {(resumeOut || resumeLoading || clOut || clLoading) && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-                  {/* Optimized Resume */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs font-bold text-navy flex items-center gap-1.5">
@@ -402,7 +482,7 @@ export default function AITools() {
                       {resumeOut && !resumeLoading && (
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => copyText(resumeOut, setResumeCopied)}
-                            className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border text-xs text-muted hover:text-navy hover:border-navy transition-colors">
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border text-xs text-muted hover:text-navy transition-colors">
                             {resumeCopied ? <Check size={11} className="text-teal" /> : <Copy size={11} />}
                             {resumeCopied ? 'Copied!' : 'Copy'}
                           </button>
@@ -414,8 +494,6 @@ export default function AITools() {
                       {resumeOut || ' '}
                     </pre>
                   </div>
-
-                  {/* Cover Letter */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs font-bold text-navy flex items-center gap-1.5">
@@ -425,7 +503,7 @@ export default function AITools() {
                       {clOut && !clLoading && (
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => copyText(clOut, setClCopied)}
-                            className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border text-xs text-muted hover:text-navy hover:border-navy transition-colors">
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border text-xs text-muted hover:text-navy transition-colors">
                             {clCopied ? <Check size={11} className="text-teal" /> : <Copy size={11} />}
                             {clCopied ? 'Copied!' : 'Copy'}
                           </button>
@@ -437,7 +515,6 @@ export default function AITools() {
                       {clOut || ' '}
                     </pre>
                   </div>
-
                 </div>
               )}
             </div>
@@ -445,34 +522,226 @@ export default function AITools() {
         </div>
       )}
 
-      {/* ── Tab 1: Resume ──────────────────────────────────────────────────── */}
+      {/* ── Tab 1: Job Match ───────────────────────────────────────────────── */}
       {tab === 1 && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="bg-white rounded-xl shadow-card p-5">
-              <Textarea
-                label="Your Current Resume"
-                placeholder="Paste your resume or upload PDF/DOCX…"
-                value={resume}
-                onChange={setResume}
-                uploadable
-              />
+          {/* No base resume warning */}
+          {!hasOriginalResume && (
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              <AlertTriangle size={16} className="text-amber-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-amber-700">
+                You haven't saved your base resume yet.{' '}
+                <button onClick={() => setTab(4)} className="underline font-semibold">Go to Settings</button>{' '}
+                to upload it once — then every job match will be scored against it automatically.
+              </p>
             </div>
-            <div className="bg-white rounded-xl shadow-card p-5">
-              <Textarea
-                label="Job Description"
-                placeholder="Add from Job Description tab, or paste directly…"
-                value={jd}
-                onChange={saveJd}
-                uploadable
-              />
+          )}
+
+          <div className="bg-white rounded-xl shadow-card p-5 space-y-4">
+            <div>
+              <h2 className="text-sm font-bold text-navy flex items-center gap-2">
+                <Target size={16} className="text-teal" />Paste Job Description to Score
+              </h2>
+              <p className="text-xs text-muted mt-0.5">
+                Fetch from URL or paste text. AI scores the match against your saved resume — then generates a tailored resume and cover letter.
+              </p>
+            </div>
+
+            {/* URL fetch for match tab */}
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input type="url" value={matchJdUrl}
+                  onChange={e => { setMatchJdUrl(e.target.value); setMatchUrlError(''); }}
+                  onKeyDown={e => e.key === 'Enter' && matchJdUrl.trim() && !matchUrlLoading &&
+                    fetchJd(matchJdUrl, v => { setMatchJd(v); setMatchJdUrl(''); }, setMatchUrlLoading, setMatchUrlError)}
+                  placeholder="Paste job URL to auto-fetch…"
+                  className="flex-1 px-3 py-2 rounded-lg border border-border text-sm text-slate-700
+                             focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal transition-colors" />
+                <button
+                  onClick={() => fetchJd(matchJdUrl, v => { setMatchJd(v); setMatchJdUrl(''); }, setMatchUrlLoading, setMatchUrlError)}
+                  disabled={!matchJdUrl.trim() || matchUrlLoading}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-teal text-white text-sm font-medium
+                             hover:bg-teal/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0">
+                  <Globe size={14} />{matchUrlLoading ? 'Fetching…' : 'Fetch'}
+                </button>
+              </div>
+              {matchUrlError && (
+                <div className="flex items-start gap-2 text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                  <AlertCircle size={13} className="shrink-0 mt-0.5" />{matchUrlError}
+                </div>
+              )}
+            </div>
+
+            <Textarea label="Job Description" placeholder="Paste job description here…"
+              value={matchJd} onChange={setMatchJd} rows={10} />
+
+            <div className="flex items-center gap-3 flex-wrap">
+              {!matchScoring ? (
+                <button onClick={() => runJobMatch(false)}
+                  disabled={matchJd.trim().length < 50 || !hasOriginalResume}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-navy text-white text-sm font-semibold
+                             shadow-sm hover:bg-navy/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                  <TrendingUp size={16} />Score This Job
+                </button>
+              ) : (
+                <button onClick={() => matchAbort.current?.abort()}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-rose-500 text-white text-sm font-semibold hover:bg-rose-600 transition-all">
+                  Stop
+                </button>
+              )}
+              {matchScoring && <span className="text-xs text-muted animate-pulse">Analysing match…</span>}
             </div>
           </div>
 
+          {/* Score result */}
+          {matchScore && (
+            <div className="space-y-4">
+              <ScoreBadge score={matchScore.score} category={matchScore.category} />
+
+              {/* Keywords breakdown */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-white rounded-xl shadow-card p-4 space-y-2">
+                  <h3 className="text-xs font-bold text-navy flex items-center gap-1.5">
+                    <CheckCircle size={13} className="text-teal" />Matched Keywords
+                  </h3>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(matchScore.matched_keywords || []).map(k => (
+                      <span key={k} className="px-2 py-0.5 bg-teal/10 text-teal text-xs rounded-full border border-teal/20">{k}</span>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-card p-4 space-y-2">
+                  <h3 className="text-xs font-bold text-navy flex items-center gap-1.5">
+                    <XCircle size={13} className="text-rose-500" />Missing Keywords
+                  </h3>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(matchScore.missing_keywords || []).map(k => (
+                      <span key={k} className="px-2 py-0.5 bg-rose-50 text-rose-600 text-xs rounded-full border border-rose-200">{k}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Strength & Gap */}
+              <div className="bg-white rounded-xl shadow-card p-4 space-y-3">
+                {matchScore.top_strength && (
+                  <div className="flex items-start gap-2">
+                    <CheckCircle size={14} className="text-teal mt-0.5 shrink-0" />
+                    <div><span className="text-xs font-bold text-navy">Top Strength: </span><span className="text-xs text-slate-600">{matchScore.top_strength}</span></div>
+                  </div>
+                )}
+                {matchScore.top_gap && (
+                  <div className="flex items-start gap-2">
+                    <AlertCircle size={14} className="text-amber-500 mt-0.5 shrink-0" />
+                    <div><span className="text-xs font-bold text-navy">Key Gap: </span><span className="text-xs text-slate-600">{matchScore.top_gap}</span></div>
+                  </div>
+                )}
+              </div>
+
+              {/* Generate full button */}
+              {!matchGenLoading && !matchResumeOut && (
+                <div className="bg-white rounded-xl shadow-card p-5">
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-navy">Generate Tailored Resume + Cover Letter</h3>
+                      <p className="text-xs text-muted mt-0.5">AI will create a fully optimized resume and cover letter for this specific job.</p>
+                    </div>
+                    <button onClick={() => runJobMatch(true)}
+                      className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-teal text-white text-sm font-semibold
+                                 shadow-sm hover:bg-teal/90 transition-all">
+                      <Sparkles size={16} />Generate Now
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Generation in progress */}
+              {matchGenLoading && (
+                <div className="flex items-center gap-3 bg-white rounded-xl shadow-card px-5 py-4">
+                  <span className="inline-block w-2 h-4 bg-teal animate-pulse rounded-sm" />
+                  <span className="text-sm text-muted animate-pulse">{matchStatus || 'Generating…'}</span>
+                  <button onClick={() => matchAbort.current?.abort()}
+                    className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500 text-white text-xs font-medium hover:bg-rose-600 transition-all">
+                    Stop
+                  </button>
+                </div>
+              )}
+
+              {matchError && (
+                <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
+                  <AlertCircle size={16} className="text-rose-500 mt-0.5 shrink-0" />
+                  <p className="text-sm text-rose-700">{matchError}</p>
+                </div>
+              )}
+
+              {/* Results */}
+              {(matchResumeOut || matchClOut) && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold text-navy flex items-center gap-1.5">
+                        <FileText size={13} className="text-teal" />Tailored Resume
+                        {matchGenLoading && !matchResumeOut.length && <span className="inline-block w-1.5 h-3.5 bg-teal animate-pulse rounded-sm ml-1" />}
+                      </h3>
+                      {matchResumeOut && !matchGenLoading && (
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => copyText(matchResumeOut, setMatchResumeCopied)}
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border text-xs text-muted hover:text-navy transition-colors">
+                            {matchResumeCopied ? <Check size={11} className="text-teal" /> : <Copy size={11} />}
+                            {matchResumeCopied ? 'Copied!' : 'Copy'}
+                          </button>
+                          <DownloadMenu text={matchResumeOut} filename="tailored-resume" />
+                        </div>
+                      )}
+                    </div>
+                    <pre className="whitespace-pre-wrap text-xs text-slate-700 font-mono leading-relaxed bg-slate-50 rounded-lg p-3 max-h-[500px] overflow-y-auto min-h-[60px]">
+                      {matchResumeOut || ' '}
+                    </pre>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold text-navy flex items-center gap-1.5">
+                        <Mail size={13} className="text-teal" />Tailored Cover Letter
+                        {matchGenLoading && matchResumeOut && !matchClOut.length && <span className="inline-block w-1.5 h-3.5 bg-teal animate-pulse rounded-sm ml-1" />}
+                      </h3>
+                      {matchClOut && !matchGenLoading && (
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => copyText(matchClOut, setMatchClCopied)}
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border text-xs text-muted hover:text-navy transition-colors">
+                            {matchClCopied ? <Check size={11} className="text-teal" /> : <Copy size={11} />}
+                            {matchClCopied ? 'Copied!' : 'Copy'}
+                          </button>
+                          <DownloadMenu text={matchClOut} filename="tailored-cover-letter" />
+                        </div>
+                      )}
+                    </div>
+                    <pre className="whitespace-pre-wrap text-xs text-slate-700 leading-relaxed bg-slate-50 rounded-lg p-3 max-h-[500px] overflow-y-auto min-h-[60px]">
+                      {matchClOut || ' '}
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tab 2: Resume ──────────────────────────────────────────────────── */}
+      {tab === 2 && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="bg-white rounded-xl shadow-card p-5">
+              <Textarea label="Your Current Resume" placeholder="Paste your resume or upload PDF/DOCX…"
+                value={resume} onChange={setResume} uploadable />
+            </div>
+            <div className="bg-white rounded-xl shadow-card p-5">
+              <Textarea label="Job Description" placeholder="Add from Job Description tab, or paste directly…"
+                value={jd} onChange={saveJd} uploadable />
+            </div>
+          </div>
           <div className="flex items-center gap-3 flex-wrap">
             {!resumeLoading ? (
-              <button
-                onClick={() => runStream('/api/ai/resume', setResumeOut, setResumeLoading, setResumeError, resumeAbort)}
+              <button onClick={() => runStream('/api/ai/resume', setResumeOut, setResumeLoading, setResumeError, resumeAbort)}
                 disabled={!canGenerate}
                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-teal text-white text-sm font-semibold
                            shadow-sm hover:bg-teal/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
@@ -492,14 +761,11 @@ export default function AITools() {
             )}
             {resumeLoading && <span className="text-sm text-muted animate-pulse">Optimizing with AI…</span>}
           </div>
-
           {resumeError && (
             <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
-              <AlertCircle size={16} className="text-rose-500 mt-0.5 shrink-0" />
-              <p className="text-sm text-rose-700">{resumeError}</p>
+              <AlertCircle size={16} className="text-rose-500 mt-0.5 shrink-0" /><p className="text-sm text-rose-700">{resumeError}</p>
             </div>
           )}
-
           {(resumeOut || resumeLoading) && (
             <div className="bg-white rounded-xl shadow-card p-5 space-y-3">
               <div className="flex items-center justify-between">
@@ -526,34 +792,22 @@ export default function AITools() {
         </div>
       )}
 
-      {/* ── Tab 2: Cover Letter ────────────────────────────────────────────── */}
-      {tab === 2 && (
+      {/* ── Tab 3: Cover Letter ────────────────────────────────────────────── */}
+      {tab === 3 && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="bg-white rounded-xl shadow-card p-5">
-              <Textarea
-                label="Your Resume"
-                placeholder="Paste your resume or upload PDF/DOCX…"
-                value={resume}
-                onChange={setResume}
-                uploadable
-              />
+              <Textarea label="Your Resume" placeholder="Paste your resume or upload PDF/DOCX…"
+                value={resume} onChange={setResume} uploadable />
             </div>
             <div className="bg-white rounded-xl shadow-card p-5">
-              <Textarea
-                label="Job Description"
-                placeholder="Add from Job Description tab, or paste directly…"
-                value={jd}
-                onChange={saveJd}
-                uploadable
-              />
+              <Textarea label="Job Description" placeholder="Add from Job Description tab, or paste directly…"
+                value={jd} onChange={saveJd} uploadable />
             </div>
           </div>
-
           <div className="flex items-center gap-3 flex-wrap">
             {!clLoading ? (
-              <button
-                onClick={() => runStream('/api/ai/cover-letter', setClOut, setClLoading, setClError, clAbort)}
+              <button onClick={() => runStream('/api/ai/cover-letter', setClOut, setClLoading, setClError, clAbort)}
                 disabled={!canGenerate}
                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-teal text-white text-sm font-semibold
                            shadow-sm hover:bg-teal/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
@@ -573,14 +827,11 @@ export default function AITools() {
             )}
             {clLoading && <span className="text-sm text-muted animate-pulse">Writing with AI…</span>}
           </div>
-
           {clError && (
             <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
-              <AlertCircle size={16} className="text-rose-500 mt-0.5 shrink-0" />
-              <p className="text-sm text-rose-700">{clError}</p>
+              <AlertCircle size={16} className="text-rose-500 mt-0.5 shrink-0" /><p className="text-sm text-rose-700">{clError}</p>
             </div>
           )}
-
           {(clOut || clLoading) && (
             <div className="bg-white rounded-xl shadow-card p-5 space-y-3">
               <div className="flex items-center justify-between">
@@ -607,40 +858,27 @@ export default function AITools() {
         </div>
       )}
 
-      {/* ── Tab 3: Interview Prep ──────────────────────────────────────────── */}
-      {tab === 3 && (
+      {/* ── Tab 4: Interview Prep ──────────────────────────────────────────── */}
+      {tab === 4 && (
         <div className="space-y-4">
           <div className="bg-white rounded-xl shadow-card p-4">
             <p className="text-xs text-muted">
-              <span className="font-semibold text-navy">How it works:</span> AI generates 5 behavioral questions with STAR-method talking points, 5 technical/role-specific questions with key points to cover, and 3 smart questions to ask your interviewer — all tailored to your resume and this specific job.
+              <span className="font-semibold text-navy">How it works:</span> AI generates 5 behavioral questions with STAR-method talking points, 5 technical questions with key points, and 3 smart questions to ask your interviewer — all tailored to your resume and job.
             </p>
           </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="bg-white rounded-xl shadow-card p-5">
-              <Textarea
-                label="Your Resume"
-                placeholder="Paste your resume or upload PDF/DOCX…"
-                value={resume}
-                onChange={setResume}
-                uploadable
-              />
+              <Textarea label="Your Resume" placeholder="Paste your resume or upload PDF/DOCX…"
+                value={resume} onChange={setResume} uploadable />
             </div>
             <div className="bg-white rounded-xl shadow-card p-5">
-              <Textarea
-                label="Job Description"
-                placeholder="Add from Job Description tab, or paste directly…"
-                value={jd}
-                onChange={saveJd}
-                uploadable
-              />
+              <Textarea label="Job Description" placeholder="Add from Job Description tab, or paste directly…"
+                value={jd} onChange={saveJd} uploadable />
             </div>
           </div>
-
           <div className="flex items-center gap-3 flex-wrap">
             {!ipLoading ? (
-              <button
-                onClick={() => runStream('/api/ai/interview-prep', setIpOut, setIpLoading, setIpError, ipAbort)}
+              <button onClick={() => runStream('/api/ai/interview-prep', setIpOut, setIpLoading, setIpError, ipAbort)}
                 disabled={!canGenerate}
                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-teal text-white text-sm font-semibold
                            shadow-sm hover:bg-teal/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
@@ -660,14 +898,11 @@ export default function AITools() {
             )}
             {ipLoading && <span className="text-sm text-muted animate-pulse">Building your prep guide…</span>}
           </div>
-
           {ipError && (
             <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
-              <AlertCircle size={16} className="text-rose-500 mt-0.5 shrink-0" />
-              <p className="text-sm text-rose-700">{ipError}</p>
+              <AlertCircle size={16} className="text-rose-500 mt-0.5 shrink-0" /><p className="text-sm text-rose-700">{ipError}</p>
             </div>
           )}
-
           {(ipOut || ipLoading) && (
             <div className="bg-white rounded-xl shadow-card p-5 space-y-3">
               <div className="flex items-center justify-between">

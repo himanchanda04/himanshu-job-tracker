@@ -65,13 +65,24 @@ router.post('/login', async (req, res) => {
 
 // ─── GET /api/auth/me ────────────────────────────────────────────────────────
 router.get('/me', authenticate, async (req, res) => {
-  const result = await pool.query('SELECT last_resume FROM users WHERE id = $1', [req.user.id]);
-  res.json({ user: { ...req.user, last_resume: result.rows[0]?.last_resume || '' } });
+  const result = await pool.query('SELECT last_resume, original_resume FROM users WHERE id = $1', [req.user.id]);
+  res.json({
+    user: {
+      ...req.user,
+      last_resume:      result.rows[0]?.last_resume      || '',
+      original_resume:  result.rows[0]?.original_resume  || '',
+    }
+  });
 });
 
 router.patch('/me', authenticate, async (req, res) => {
-  const { last_resume } = req.body;
-  await pool.query('UPDATE users SET last_resume = $1 WHERE id = $2', [last_resume ?? '', req.user.id]);
+  const { last_resume, original_resume } = req.body;
+  if (original_resume !== undefined) {
+    await pool.query('UPDATE users SET original_resume = $1 WHERE id = $2', [original_resume ?? '', req.user.id]);
+  }
+  if (last_resume !== undefined) {
+    await pool.query('UPDATE users SET last_resume = $1 WHERE id = $2', [last_resume ?? '', req.user.id]);
+  }
   res.json({ ok: true });
 });
 
