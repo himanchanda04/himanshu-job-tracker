@@ -65,6 +65,7 @@ function sseStream(res) {
   res.flushHeaders();
   return {
     send:  (text) => res.write(`data: ${JSON.stringify({ text })}\n\n`),
+    typed: (obj)  => res.write(`data: ${JSON.stringify(obj)}\n\n`),
     done:  ()     => { res.write('data: [DONE]\n\n'); res.end(); },
     error: (msg)  => { res.write(`data: ${JSON.stringify({ error: msg })}\n\n`); res.end(); },
   };
@@ -208,7 +209,7 @@ router.post('/job-match', authenticate, async (req, res) => {
     return res.status(400).json({ error: 'No base resume found. Please upload your resume in Settings → My Resume first.' });
 
   const sse = sseStream(res);
-  sse.send(JSON.stringify({ type: 'status', text: 'Analysing match…' }));
+  sse.typed({ type: 'status', text: 'Analysing match…' });
 
   try {
     const client = getClient();
@@ -254,7 +255,7 @@ ${originalResume.slice(0, 4000)}`,
     }
 
     // Send score immediately so UI can render it
-    sse.send(JSON.stringify({ type: 'score', data: scoreData }));
+    sse.typed({ type: 'score', data: scoreData });
 
     // ── Step 2: Full generation (Sonnet) only if requested ─────────────────
     if (!generateFull) {
@@ -262,7 +263,7 @@ ${originalResume.slice(0, 4000)}`,
     }
 
     // Resume stream
-    sse.send(JSON.stringify({ type: 'status', text: 'Generating resume…' }));
+    sse.typed({ type: 'status', text: 'Generating resume…' });
     const resumeStream = client.messages.stream({
       model:      'claude-sonnet-4-6',
       max_tokens: 4096,
@@ -285,13 +286,13 @@ ${originalResume}`,
     for await (const event of resumeStream) {
       if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
         resumeText += event.delta.text;
-        sse.send(JSON.stringify({ type: 'resume_chunk', text: event.delta.text }));
+        sse.typed({ type: 'resume_chunk', text: event.delta.text });
       }
     }
-    sse.send(JSON.stringify({ type: 'resume_done' }));
+    sse.typed({ type: 'resume_done' });
 
     // Cover letter stream
-    sse.send(JSON.stringify({ type: 'status', text: 'Generating cover letter…' }));
+    sse.typed({ type: 'status', text: 'Generating cover letter…' });
     const clStream = client.messages.stream({
       model:      'claude-sonnet-4-6',
       max_tokens: 1024,
@@ -314,10 +315,10 @@ ${originalResume}`,
 
     for await (const event of clStream) {
       if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
-        sse.send(JSON.stringify({ type: 'cl_chunk', text: event.delta.text }));
+        sse.typed({ type: 'cl_chunk', text: event.delta.text });
       }
     }
-    sse.send(JSON.stringify({ type: 'cl_done' }));
+    sse.typed({ type: 'cl_done' });
     sse.done();
 
   } catch (err) { sse.error(err.message); }
