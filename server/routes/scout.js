@@ -13,18 +13,23 @@ import { curateDigest }       from '../services/jobCurator.js';
 import { sendScoutDigest }    from '../services/emailDigest.js';
 import { checkApifyBudget }   from '../services/apifyBudgetGuard.js';
 import { checkClaudeBudget }  from '../services/claudeBudgetGuard.js';
+import { authenticate }       from '../middleware/auth.js';
 
 const router = express.Router();
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
+// userAuth = [authenticate, requireAuth] applied per-route to every
+// human-facing endpoint below. /run/auto and /deploy are intentionally
+// excluded — they're called by external services (cron-job.org, deploy
+// webhooks) with no user JWT, and authenticate via their own header checks.
 function requireAuth(req, res, next) {
   if (!req.user?.id) return res.status(401).json({ error: 'Unauthorized' });
   next();
 }
-router.use(requireAuth);
+const userAuth = [authenticate, requireAuth];
 
 // ─── GET /api/scout/settings ──────────────────────────────────────────────────
-router.get('/settings', async (req, res) => {
+router.get('/settings', userAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT * FROM scout_settings WHERE user_id = $1', [req.user.id]
@@ -36,7 +41,7 @@ router.get('/settings', async (req, res) => {
 });
 
 // ─── PATCH /api/scout/settings ────────────────────────────────────────────────
-router.patch('/settings', async (req, res) => {
+router.patch('/settings', userAuth, async (req, res) => {
   const { target_title = '', industry = '', min_score = 75, is_active = true, email_notify = true } = req.body;
   try {
     const { rows } = await pool.query(
@@ -55,7 +60,7 @@ router.patch('/settings', async (req, res) => {
 });
 
 // ─── GET /api/scout/results ───────────────────────────────────────────────────
-router.get('/results', async (req, res) => {
+router.get('/results', userAuth, async (req, res) => {
   const { min_score = 0, status, limit = 60, offset = 0 } = req.query;
   try {
     let q      = `SELECT * FROM scout_results WHERE user_id=$1 AND status != 'dismissed' AND (score >= $2 OR score IS NULL)`;
@@ -78,7 +83,7 @@ router.get('/results', async (req, res) => {
 });
 
 // ─── POST /api/scout/results/seen — mark all new as seen ─────────────────────
-router.post('/results/seen', async (req, res) => {
+router.post('/results/seen', userAuth, async (req, res) => {
   try {
     await pool.query(
       `UPDATE scout_results SET status='seen' WHERE user_id=$1 AND status='new'`,
@@ -91,7 +96,7 @@ router.post('/results/seen', async (req, res) => {
 });
 
 // ─── PATCH /api/scout/results/:hash — update status ──────────────────────────
-router.patch('/results/:hash', async (req, res) => {
+router.patch('/results/:hash', userAuth, async (req, res) => {
   const { status } = req.body;
   if (!['seen','saved','dismissed','added_to_tracker'].includes(status)) {
     return res.status(400).json({ error: 'Invalid status' });
@@ -108,7 +113,7 @@ router.patch('/results/:hash', async (req, res) => {
 });
 
 // ─── GET /api/scout/budget ────────────────────────────────────────────────────
-router.get('/budget', async (req, res) => {
+router.get('/budget', userAuth, async (req, res) => {
   try {
     const [apify, claude] = await Promise.all([
       checkApifyBudget(req.user.id),
@@ -121,7 +126,7 @@ router.get('/budget', async (req, res) => {
 });
 
 // ─── GET /api/scout/runs ──────────────────────────────────────────────────────
-router.get('/runs', async (req, res) => {
+router.get('/runs', userAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT * FROM scout_runs WHERE user_id=$1 ORDER BY started_at DESC LIMIT 10`,
@@ -312,7 +317,7 @@ async function runScout(userId, triggeredBy = 'manual') {
 }
 
 // ─── POST /api/scout/run — manual trigger ─────────────────────────────────────
-router.post('/run', async (req, res) => {
+router.post('/run', userAuth, async (req, res) => {
   try {
     const result = await runScout(req.user.id, 'manual');
     res.json({ ok: true, ...result });
