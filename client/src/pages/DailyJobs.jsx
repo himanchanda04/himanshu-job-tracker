@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Calendar, Briefcase, ExternalLink, ChevronDown, ChevronRight, BookOpen } from 'lucide-react';
-import { api } from '../api/applications';
+
 
 function ScoreBadge({ score }) {
   if (!score) return null;
@@ -119,7 +119,7 @@ export default function DailyJobs() {
   useEffect(() => {
     async function load() {
       try {
-        const res  = await api.get('/scout/results?limit=200');
+        const token = localStorage.getItem('token'); const r = await fetch('https://himanshu-job-tracker.onrender.com/api/scout/results?limit=200', {headers:{Authorization:'Bearer '+token}}); const res = {data: await r.json()};
         const jobs = res.data.jobs || res.data.results || res.data || [];
         setTotal(jobs.length);
 
