@@ -127,7 +127,7 @@ export default function DailyJobs() {
         });
         if (!res.ok) throw new Error('Failed to load job postings');
         const data = await res.json();
-        const jobs = data.results || data || [];
+        const jobs = data.jobs || data.results || data || [];
         setTotal(jobs.length);
 
         // Group by date (YYYY-MM-DD based on last_seen_at or posted_at)
