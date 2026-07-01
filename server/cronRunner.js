@@ -80,7 +80,7 @@ async function main() {
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'new',NOW(),$16,$17,$18,$19,$20,$21,$22,$23)
            ON CONFLICT (user_id, job_hash) DO UPDATE SET last_seen_at=NOW(), score=EXCLUDED.score, sources=EXCLUDED.sources, noc_code=EXCLUDED.noc_code, noc_teer=EXCLUDED.noc_teer, pr_eligible=EXCLUDED.pr_eligible, pr_tier=EXCLUDED.pr_tier, title_match=EXCLUDED.title_match, job_category=EXCLUDED.job_category, digest_bucket=EXCLUDED.digest_bucket
            RETURNING (xmax=0) AS is_new`,
-          [user.id, job.job_hash, job.title, job.company, job.location || 'Winnipeg, MB', job.url, (job.description || '').slice(0, 2500), job.sources || [job.source], job.posted_at || new Date(), job.score, job.match_tier, job.matched_keywords || [], job.missing_keywords || [], job.is_ghost_job || false, job.scoring_mode || 'keyword', job.noc_code || null, job.noc_teer ?? null, job.pr_eligible || false, job.pr_tier || null, job.title_match || 'unknown', job.category || 'other', job.fake_signal_count || 0, bucket]
+          [user.id, job.job_hash, job.title, job.company, job.location || 'Winnipeg, MB', job.url, (job.description || '').slice(0, 2500), job.sources || [job.source], (job.posted_at && !isNaN(new Date(job.posted_at))) ? new Date(job.posted_at) : new Date(), job.score, job.match_tier, job.matched_keywords || [], job.missing_keywords || [], job.is_ghost_job || false, job.scoring_mode || 'keyword', job.noc_code || null, job.noc_teer ?? null, job.pr_eligible || false, job.pr_tier || null, job.title_match || 'unknown', job.category || 'other', job.fake_signal_count || 0, bucket]
         );
         if (ins.rows[0]?.is_new) newCount++;
       }
