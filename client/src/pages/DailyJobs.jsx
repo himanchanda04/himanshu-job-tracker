@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Briefcase, ExternalLink, ChevronDown, ChevronRight, Star, BookOpen } from 'lucide-react';
-
-const API = import.meta.env.VITE_API_URL || 'https://himanshu-job-tracker.onrender.com';
+import { Calendar, Briefcase, ExternalLink, ChevronDown, ChevronRight, BookOpen } from 'lucide-react';
+import { api } from '../api/applications';
 
 function ScoreBadge({ score }) {
   if (!score) return null;
@@ -112,7 +111,6 @@ function DateGroup({ date, jobs, defaultOpen }) {
 }
 
 export default function DailyJobs() {
-  const token = localStorage.getItem('token');
   const [grouped, setGrouped]   = useState({});
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
@@ -121,12 +119,8 @@ export default function DailyJobs() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`${API}/api/scout/results?limit=200`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error('Failed to load job postings');
-        const data = await res.json();
-        const jobs = data.jobs || data.results || data || [];
+        const res  = await api.get('/scout/results?limit=200');
+        const jobs = res.data.jobs || res.data.results || res.data || [];
         setTotal(jobs.length);
 
         // Group by date (YYYY-MM-DD based on last_seen_at or posted_at)
@@ -156,7 +150,7 @@ export default function DailyJobs() {
       }
     }
     load();
-  }, [token]);
+  }, []);
 
   const dates = Object.keys(grouped).sort().reverse(); // newest first
 
