@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Calendar, Briefcase, ExternalLink, ChevronDown, ChevronRight, Star, BookOpen } from 'lucide-react';
 
-const API = import.meta.env.VITE_API_URL || '';
+const API = import.meta.env.VITE_API_URL || 'https://himanshu-job-tracker.onrender.com';
 
 function ScoreBadge({ score }) {
   if (!score) return null;
