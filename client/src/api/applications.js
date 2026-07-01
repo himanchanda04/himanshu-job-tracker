@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 // In development: VITE_API_URL is empty → Vite proxy routes /api → localhost:3001
-// In production (Vercel): VITE_API_URL = https://your-app.railway.app
-const BASE = import.meta.env.VITE_API_URL || '';
+// In production (Vercel): VITE_API_URL = https://himanshu-job-tracker.onrender.com
+const BASE = import.meta.env.VITE_API_URL || 'https://himanshu-job-tracker.onrender.com';
 
 export const api = axios.create({ baseURL: `${BASE}/api` });
 
