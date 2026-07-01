@@ -3,41 +3,38 @@
 // It runs the full Job Scout pipeline for all active users and exits cleanly.
 // Schedule: 0 14 * * * (8:00 AM America/Winnipeg = 14:00 UTC)
 
-import pool                                 from './db/database.js';
-import { runScoutMigration }               from './db/scout_migration.js';
-import { runScoutMigrationV2 }             from './db/scout_migration_v2.js';
-import { fetchAllSources }                 from './services/jobFetcher.js';
-import { deduplicateJobs, generateJobHash } from './services/jobDeduplicator.js';
+import pool                                  from './db/database.js';
+import { initDB }                            from './db/database.js';
+import { runScoutMigration }                 from './db/scout_migration.js';
+import { runScoutMigrationV2 }               from './db/scout_migration_v2.js';
+import { fetchAllSources }                   from './services/jobFetcher.js';
+import { deduplicateJobs, generateJobHash }  from './services/jobDeduplicator.js';
 import {
   passesQualityGates,
-  extractKeywordsFromResume,
   detectGhostJob,
   detectFakeJob,
 } from './services/qualityFilter.js';
-import { scoreJobs }       from './services/jobScorer.js';
-import { curateDigest }    from './services/jobCurator.js';
-import { sendScoutDigest } from './services/emailDigest.js';
+import { scoreJobs }        from './services/jobScorer.js';
+import { curateDigest }     from './services/jobCurator.js';
+import { sendScoutDigest }  from './services/emailDigest.js';
 import { checkApifyBudget } from './services/apifyBudgetGuard.js';
 
 async function main() {
   console.log('[CronRunner] Starting Job Scout daily run...');
 
-  // Run migrations (idempotent — safe to call every time)
+  // Initialize DB schema (creates all tables including users.original_resume)
+  await initDB();
   await runScoutMigration();
   await runScoutMigrationV2();
 
-  // Find all active scout users
+  // Find all active scout users — resume is stored on users table directly
   const { rows: users } = await pool.query(`
     SELECT
       u.id, u.name, u.email,
-      ss.target_title, ss.industry, ss.email_notify,
-      r.resume_text AS original_resume
+      u.original_resume,
+      ss.target_title, ss.industry, ss.email_notify
     FROM users u
     INNER JOIN scout_settings ss ON ss.user_id = u.id
-    LEFT JOIN (
-      SELECT DISTINCT ON (user_id) user_id, resume_text
-      FROM resumes ORDER BY user_id, created_at DESC
-    ) r ON r.user_id = u.id
     WHERE ss.is_active = true
   `);
 
