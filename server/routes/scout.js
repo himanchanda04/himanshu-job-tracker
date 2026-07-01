@@ -333,20 +333,29 @@ router.post('/run/auto', async (req, res) => {
   if (req.headers['x-cron-token'] !== process.env.CRON_SECRET_TOKEN) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  try {
-    // Single-user: find the user with an active scout setting
-    const { rows } = await pool.query(
-      `SELECT u.id FROM users u
-       INNER JOIN scout_settings ss ON ss.user_id = u.id
-       WHERE ss.is_active = true LIMIT 1`
-    );
-    if (!rows.length) return res.json({ ok: true, message: 'No active scout users' });
-    const result = await runScout(rows[0].id, 'auto');
-    res.json({ ok: true, ...result });
-  } catch (err) {
-    console.error('[Scout] Auto run error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
+  // Respond immediately with a tiny payload so cron-job.org never
+  // hits its response-size or timeout limit. The actual scout pipeline
+  // runs in the background after the HTTP response is already sent.
+  res.json({ ok: true, message: 'Scout started' });
+
+  // Background execution — errors logged to Render, never sent to cron-job.org
+  setImmediate(async () => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT u.id FROM users u
+         INNER JOIN scout_settings ss ON ss.user_id = u.id
+         WHERE ss.is_active = true LIMIT 1`
+      );
+      if (!rows.length) {
+        console.log('[Scout] No active scout users — skipping run');
+        return;
+      }
+      const result = await runScout(rows[0].id, 'auto');
+      console.log(`[Scout] Auto run complete — ${result.primaryCount} primary, ${result.secondaryCount} secondary, ${result.jobsFound} new`);
+    } catch (err) {
+      console.error('[Scout] Auto run error:', err.message);
+    }
+  });
 });
 
 // ─── POST /api/scout/deploy — trigger Vercel + Render hooks ──────────────────
