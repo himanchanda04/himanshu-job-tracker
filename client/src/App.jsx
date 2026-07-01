@@ -6,6 +6,7 @@ import Applications  from './pages/Applications';
 import Discarded     from './pages/Discarded';
 import Settings      from './pages/Settings';
 import AITools       from './pages/AITools';
+import DailyJobs     from './pages/DailyJobs';
 import Login         from './pages/Login';
 import Register      from './pages/Register';
 
@@ -38,8 +39,9 @@ export default function App() {
             <Route index                    element={<Dashboard />}    />
             <Route path="applications"      element={<Applications />} />
             <Route path="discarded"         element={<Discarded />}    />
-            <Route path="settings"          element={<Settings />}     />
+            <Route path="daily-jobs"        element={<DailyJobs />}   />
             <Route path="ai-tools"          element={<AITools />}      />
+            <Route path="settings"          element={<Settings />}     />
             <Route path="resume"            element={<Navigate to="/ai-tools" replace />} />
             <Route path="cover-letter"      element={<Navigate to="/ai-tools" replace />} />
           </Route>
