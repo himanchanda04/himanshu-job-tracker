@@ -1,6 +1,7 @@
 import { checkApifyBudget, recordApifyCost } from './apifyBudgetGuard.js';
 
-const TIMEOUT_MS = 15_000;
+const TIMEOUT_MS       = 90_000; // 90 seconds — Apify actors need time to run
+const APIFY_TIMEOUT_S  = 80;     // Apify-side timeout in seconds (passed in URL)
 
 // ─── Fetch with hard timeout ──────────────────────────────────────────────────
 async function timedFetch(url, options = {}) {
@@ -45,25 +46,28 @@ async function fetchAdzuna(targetTitle, industry) {
 
 // ─── Source: Canada Job Bank ──────────────────────────────────────────────────
 async function fetchJobBank(targetTitle) {
-  const q   = encodeURIComponent(targetTitle || 'marketing');
-  // Official Job Bank search — Winnipeg locationId 9219044, 25 km radius
-  const url = `https://jobs.gc.ca/api/jobs?keywords=${q}&locationId=9219044&distance=25&date=1&lang=en`;
+  const q = encodeURIComponent(targetTitle || 'marketing');
+  // Official Job Bank search API — Winnipeg, MB
+  const url = `https://jobs.gc.ca/api/jobs?keywords=${q}&locationId=9219044&distance=25&date=1&lang=en&pageSize=25`;
 
   const res = await timedFetch(url, {
-    headers: { Accept: 'application/json', 'User-Agent': 'JobScout/1.0' },
+    headers: {
+      'Accept':     'application/json',
+      'User-Agent': 'Mozilla/5.0 (compatible; JobScout/1.0)',
+    },
   });
   if (!res.ok) throw new Error(`Job Bank ${res.status}`);
   const data = await res.json();
   const list = data.data || data.jobs || data.results || [];
 
   return list.map(j => ({
-    title:     j.title || j.jobTitle || '',
-    company:   j.employer || j.company || '',
-    location:  'Winnipeg, MB',
-    url:       j.applyUrl || j.url || `https://jobs.gc.ca/job/${j.jobId}`,
+    title:       j.title || j.jobTitle || '',
+    company:     j.employer || j.company || '',
+    location:    'Winnipeg, MB',
+    url:         j.applyUrl || j.url || `https://jobs.gc.ca/job/${j.jobId || ''}`,
     description: j.description || j.duties || '',
-    posted_at: j.datePosted ? new Date(j.datePosted) : new Date(),
-    source:    'Canada Job Bank',
+    posted_at:   j.datePosted ? new Date(j.datePosted) : new Date(),
+    source:      'Canada Job Bank',
   }));
 }
 
@@ -73,7 +77,6 @@ async function fetchJooble(targetTitle, industry) {
   if (!apiKey) throw new Error('Jooble API key missing');
 
   const yesterday = new Date(Date.now() - 864e5).toISOString().split('T')[0];
-
   const res = await timedFetch(`https://jooble.org/api/${apiKey}`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -87,13 +90,13 @@ async function fetchJooble(targetTitle, industry) {
   const data = await res.json();
 
   return (data.jobs || []).map(j => ({
-    title:     j.title || '',
-    company:   j.company || '',
-    location:  j.location || 'Winnipeg, MB',
-    url:       j.link || '',
+    title:       j.title || '',
+    company:     j.company || '',
+    location:    j.location || 'Winnipeg, MB',
+    url:         j.link || '',
     description: j.snippet || '',
-    posted_at: j.updated ? new Date(j.updated) : new Date(),
-    source:    'Jooble',
+    posted_at:   j.updated ? new Date(j.updated) : new Date(),
+    source:      'Jooble',
   }));
 }
 
@@ -105,34 +108,33 @@ async function fetchLinkedIn(targetTitle, userId) {
   const token = process.env.APIFY_API_TOKEN;
   if (!token) throw new Error('Apify token missing');
 
-  // Actor: apify/linkedin-jobs-scraper  (verify in your Apify console)
+  // Using the most reliable LinkedIn jobs scraper actor on Apify
   const res = await timedFetch(
-    `https://api.apify.com/v2/acts/apify~linkedin-jobs-scraper/run-sync-get-dataset-items?token=${token}&timeout=30`,
+    `https://api.apify.com/v2/acts/curious_coder~linkedin-jobs-scraper/run-sync-get-dataset-items?token=${token}&timeout=${APIFY_TIMEOUT_S}&memory=512`,
     {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        searchQueries: [`${targetTitle || 'marketing coordinator'} Winnipeg`],
-        location:      'Winnipeg, Manitoba, Canada',
-        maxItems:      20,
-        datePosted:    'Past 24 hours',
+        queries:    [`${targetTitle || 'marketing'} Winnipeg`],
+        location:   'Winnipeg, Manitoba, Canada',
+        maxResults: 20,
+        datePosted: 'Past 24 hours',
       }),
     }
   );
   if (!res.ok) throw new Error(`Apify LinkedIn ${res.status}`);
   const data = await res.json();
 
-  // Estimate cost — LinkedIn actor ~$0.04 per run on starter
   await recordApifyCost(userId, 0.04, null).catch(() => {});
 
   return (Array.isArray(data) ? data : []).map(j => ({
-    title:     j.title || '',
-    company:   j.companyName || j.company || '',
-    location:  j.location || 'Winnipeg, MB',
-    url:       j.jobUrl || j.url || '',
+    title:       j.title || j.jobTitle || '',
+    company:     j.companyName || j.company || '',
+    location:    j.location || 'Winnipeg, MB',
+    url:         j.jobUrl || j.url || '',
     description: j.description || j.descriptionText || '',
-    posted_at: j.postedAt ? new Date(j.postedAt) : new Date(),
-    source:    'LinkedIn',
+    posted_at:   j.postedAt ? new Date(j.postedAt) : new Date(),
+    source:      'LinkedIn',
   }));
 }
 
@@ -144,18 +146,17 @@ async function fetchIndeed(targetTitle, userId) {
   const token = process.env.APIFY_API_TOKEN;
   if (!token) throw new Error('Apify token missing');
 
-  // Actor: misceres/indeed-scraper  (verify in your Apify console)
   const res = await timedFetch(
-    `https://api.apify.com/v2/acts/misceres~indeed-scraper/run-sync-get-dataset-items?token=${token}&timeout=30`,
+    `https://api.apify.com/v2/acts/misceres~indeed-scraper/run-sync-get-dataset-items?token=${token}&timeout=${APIFY_TIMEOUT_S}&memory=512`,
     {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        position:   targetTitle || 'marketing coordinator',
-        country:    'CA',
-        location:   'Winnipeg, MB',
-        maxItems:   20,
-        startUrls:  [],
+        position:  targetTitle || 'marketing coordinator',
+        country:   'CA',
+        location:  'Winnipeg, MB',
+        maxItems:  20,
+        startUrls: [],
       }),
     }
   );
@@ -165,15 +166,16 @@ async function fetchIndeed(targetTitle, userId) {
   await recordApifyCost(userId, 0.03, null).catch(() => {});
 
   return (Array.isArray(data) ? data : []).map(j => ({
-    title:     j.positionName || j.title || '',
-    company:   j.company || '',
-    location:  j.location || 'Winnipeg, MB',
-    url:       j.url || j.externalApplyLink || '',
+    title:       j.positionName || j.title || '',
+    company:     j.company || '',
+    location:    j.location || 'Winnipeg, MB',
+    url:         j.url || j.externalApplyLink || '',
     description: j.description || '',
-    posted_at: j.postedAt ? new Date(j.postedAt) : new Date(),
-    source:    'Indeed',
+    posted_at:   j.postedAt ? new Date(j.postedAt) : new Date(),
+    source:      'Indeed',
   }));
 }
+
 
 // ─── Main export: all sources in parallel ─────────────────────────────────────
 export async function fetchAllSources(targetTitle, industry, userId) {
