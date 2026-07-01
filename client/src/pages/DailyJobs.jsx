@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Calendar, Briefcase, ExternalLink, ChevronDown, ChevronRight, Star, BookOpen } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -113,7 +112,7 @@ function DateGroup({ date, jobs, defaultOpen }) {
 }
 
 export default function DailyJobs() {
-  const { token } = useAuth();
+  const token = localStorage.getItem('token');
   const [grouped, setGrouped]   = useState({});
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
