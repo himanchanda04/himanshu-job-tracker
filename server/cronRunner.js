@@ -17,7 +17,6 @@ import {
 import { scoreJobs }        from './services/jobScorer.js';
 import { curateDigest }     from './services/jobCurator.js';
 import { sendScoutDigest }  from './services/emailDigest.js';
-import { checkApifyBudget } from './services/apifyBudgetGuard.js';
 
 async function main() {
   console.log('[CronRunner] Starting Job Scout daily run...');
@@ -54,9 +53,6 @@ async function main() {
         continue;
       }
 
-      // Check Apify budget
-      const apifyBudget = await checkApifyBudget(user.id);
-
       // Create run record
       const { rows: [run] } = await pool.query(
         `INSERT INTO scout_runs (user_id, triggered_by, status, started_at)
@@ -65,11 +61,10 @@ async function main() {
       );
       const runId = run.id;
 
-      // Fetch from all sources
+      // Fetch from all sources (budget check happens inside fetchAllSources)
       const { allJobs, sourcesUsed, sourcesFailed } = await fetchAllSources(
         user.target_title || 'Marketing',
         user.industry || '',
-        apifyBudget,
         user.id
       );
 
