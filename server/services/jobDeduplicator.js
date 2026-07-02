@@ -1,11 +1,24 @@
 import crypto from 'crypto';
 
 export function generateJobHash(job) {
-  const key = [
-    (job.title   || '').toLowerCase().replace(/\s+/g, ' ').trim(),
-    (job.company || '').toLowerCase().trim(),
-    (job.location|| '').toLowerCase().trim(),
-  ].join('||');
+  const normalizedTitle = (job.title || '')
+    .toLowerCase()
+    .replace(/\(.*?\)/g, '')      // strip anything in parentheses, e.g. "(Remote)"
+    .replace(/[^a-z0-9\s]/g, '')  // strip punctuation
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const normalizedCompany = (job.company || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Location intentionally excluded — sources format it inconsistently
+  // (e.g. "Winnipeg, MB" vs "Winnipeg, Manitoba, Canada") which was
+  // causing true duplicates across Indeed/LinkedIn to be treated as
+  // separate jobs.
+  const key = [normalizedTitle, normalizedCompany].join('||');
   return crypto.createHash('sha256').update(key).digest('hex').slice(0, 32);
 }
 
