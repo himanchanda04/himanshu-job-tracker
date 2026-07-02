@@ -88,23 +88,26 @@ async function fetchJooble(targetTitle, industry) {
 async function fetchLinkedIn(targetTitle, userId) {
   const budget = await checkApifyBudget(userId);
   if (!budget.allowed) throw new Error('APIFY_BUDGET_CAP');
+  const totalBudget = await checkTotalBudget(userId);
+  if (!totalBudget.allowed) throw new Error('APIFY_BUDGET_CAP');
   const token = process.env.APIFY_API_TOKEN;
   if (!token) throw new Error('Apify token missing');
   // f_TPR=r86400 filters to last 24 hours on LinkedIn
+  const searchUrl = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(targetTitle || 'marketing')}&location=Winnipeg%2C%20Manitoba%2C%20Canada&f_TPR=r86400&position=1&pageNum=0`;
   const res = await timedFetch(
     `https://api.apify.com/v2/acts/curious_coder~linkedin-jobs-scraper/run-sync-get-dataset-items?token=${token}&timeout=${APIFY_TIMEOUT_S}&memory=512`,
     {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        searchUrls: [{
-          url: `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(targetTitle || 'marketing')}&location=Winnipeg%2C%20Manitoba%2C%20Canada&f_TPR=r86400`,
-        }],
-        maxResults: 20,
+        urls: [searchUrl],
+        scrapeCompany: true,
+        count: 20,
+        splitByLocation: false,
       }),
     }
   );
-  if (!res.ok) throw new Error(`Apify LinkedIn ${res.status}`);
+  if (!res.ok) { const errBody = await res.text(); throw new Error(`Apify LinkedIn ${res.status}: ${errBody.slice(0, 300)}`); }
   const data = await res.json();
   await recordApifyCost(userId, 0.04, null).catch(() => {});
   return (Array.isArray(data) ? data : []).map(j => ({
@@ -122,6 +125,8 @@ async function fetchLinkedIn(targetTitle, userId) {
 async function fetchIndeed(targetTitle, userId) {
   const budget = await checkApifyBudget(userId);
   if (!budget.allowed) throw new Error('APIFY_BUDGET_CAP');
+  const totalBudget = await checkTotalBudget(userId);
+  if (!totalBudget.allowed) throw new Error('APIFY_BUDGET_CAP');
   const token = process.env.APIFY_API_TOKEN;
   if (!token) throw new Error('Apify token missing');
   const res = await timedFetch(
