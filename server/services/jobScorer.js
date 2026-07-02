@@ -66,7 +66,11 @@ JOBS
 ${summaries}
 
 For each job, return ALL of the following fields:
-- score: 0-100 match strength against the candidate's resume. Be realistic and strict — only award 90+ for a genuine strong match.
+- score: 0-100 match strength against the candidate's resume.
+  EXPERIENCE LEVEL RULE: The candidate wants entry-level/junior roles, not management roles.
+  - Jobs asking for internship, 0-1 years, or 1-3 years of experience should score in the 80-100 range IF the required skills reasonably align (see skill list below), even if the candidate does not have an exact skills match for every requirement.
+  - Jobs requiring 5+ years of experience, or titled '''Manager''', '''Director''', '''Senior''', or '''Head of''' should score low (below 50) regardless of skill overlap, since the candidate is not targeting management-level roles.
+  - Relevant skills to weigh positively: SQL, Python (as an asset/nice-to-have is fine, not required), MS Excel, Google Data Analytics, GA4, Google Ads, marketing strategy, graphic design, Canva.
 - matched_keywords: up to 8 specific skills/tools actually present in both resume and job.
 - missing_keywords: up to 5 hard requirements the candidate clearly lacks.
 - noc_code: the single best-matching Canada NOC 2021 5-digit code for this job's actual title and duties (e.g. "11202" for marketing/business development professional, "10022" for marketing manager, "11101" for financial/data analyst, "21222" for data analyst/information systems specialist, "13100" for administrative officer). If you cannot confidently determine a NOC code, return null.
