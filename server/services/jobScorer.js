@@ -70,7 +70,7 @@ For each job, return ALL of the following fields:
 - matched_keywords: up to 8 specific skills/tools actually present in both resume and job.
 - missing_keywords: up to 5 hard requirements the candidate clearly lacks.
 - noc_code: the single best-matching Canada NOC 2021 5-digit code for this job's actual title and duties (e.g. "11202" for marketing/business development professional, "10022" for marketing manager, "11101" for financial/data analyst, "21222" for data analyst/information systems specialist, "13100" for administrative officer). If you cannot confidently determine a NOC code, return null.
-- category: one of "marketing", "data_analytics", "digital", "finance", "admin", "hr", "engineering", "sales", "trades", "other" — pick the single best fit based on the actual job duties described.
+- category: one of "marketing", "analytics", "digital", "finance", "admin", "hr", "engineering", "sales", "trades", "other" — pick the single best fit based on the actual job duties described.
 - title_match: "exact" if the job title accurately reflects the duties described, "close" if there's a minor mismatch (e.g. duties are more junior/senior than the title suggests), "mismatch" if the title is clearly misleading relative to the actual duties (e.g. titled "Marketing Manager" but duties are data entry, or vague/scammy duties with no real specifics).
 
 Be strict on title_match — if the description is vague, generic, or doesn't clearly support the stated title, mark it "mismatch" rather than guessing favorably.

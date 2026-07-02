@@ -22,11 +22,11 @@ import { isCoreNoc } from './nocMapper.js';
 
 const PRIMARY_SCORE_THRESHOLD   = 60;
 const SECONDARY_SCORE_MIN       = 40;
-const SECONDARY_SCORE_MAX       = 59;
+const SECONDARY_SCORE_MAX       = 100;
 const PRIMARY_TOP_N             = 10;
 const SECONDARY_TOP_N           = 10;
 
-const SECONDARY_CATEGORIES = new Set(['marketing', 'data_analytics', 'digital']);
+const SECONDARY_CATEGORIES = new Set(['marketing', 'analytics', 'digital', 'finance', 'admin', 'sales', 'other']);
 
 function isCoreNocJob(job) {
   return isCoreNoc(job.noc_code);
