@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Briefcase, ExternalLink, BookOpen } from 'lucide-react';
+import { Briefcase, ExternalLink, BookOpen, ChevronDown } from 'lucide-react';
 
 function formatDateHeader(dateStr) {
   const jobDate = new Date(dateStr);
@@ -40,9 +40,11 @@ function JobCard({ job }) {
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${job.digest_bucket === 'primary' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>
-              {job.digest_bucket === 'primary' ? '⭐ Top Match' : '🔎 Worth a Look'}
-            </span>
+            {job.digest_bucket && (
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${job.digest_bucket === 'primary' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                {job.digest_bucket === 'primary' ? '⭐ Top Match' : '🔎 Worth a Look'}
+              </span>
+            )}
             {job.score && <span className="bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">{job.score}%</span>}
             {job.noc_code && <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">NOC {job.noc_code} ✅</span>}
           </div>
@@ -65,10 +67,65 @@ function JobCard({ job }) {
   );
 }
 
+function DateGroup({ group, isOpen, onToggle }) {
+  const primary = group.jobs.filter(j => j.digest_bucket === 'primary');
+  const secondary = group.jobs.filter(j => j.digest_bucket === 'secondary');
+  const more = group.jobs.filter(j => !j.digest_bucket);
+
+  return (
+    <div className="mb-4">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between gap-2 mb-3 pb-2 border-b border-gray-200 text-left"
+      >
+        <h2 className="text-lg font-bold text-gray-800">
+          {group.label} <span className="text-sm font-normal text-gray-400">({group.jobs.length})</span>
+        </h2>
+        <ChevronDown
+          size={20}
+          className={`text-gray-400 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {isOpen && (
+        <div>
+          {primary.length > 0 && (
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">⭐ Top Matches ({primary.length})</h3>
+              <div className="space-y-3">
+                {primary.map(job => <JobCard key={job.job_hash} job={job} />)}
+              </div>
+            </div>
+          )}
+
+          {secondary.length > 0 && (
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">🔎 Also Worth a Look ({secondary.length})</h3>
+              <div className="space-y-3">
+                {secondary.map(job => <JobCard key={job.job_hash} job={job} />)}
+              </div>
+            </div>
+          )}
+
+          {more.length > 0 && (
+            <div>
+              <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3">📋 More Results ({more.length})</h3>
+              <div className="space-y-3">
+                {more.map(job => <JobCard key={job.job_hash} job={job} />)}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DailyJobs() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [openDates, setOpenDates] = useState({});
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -82,8 +139,13 @@ export default function DailyJobs() {
     })
       .then(res => res.json())
       .then(data => {
-        const all = (data.jobs || []).filter(j => j.digest_bucket);
+        const all = data.jobs || [];
         setJobs(all);
+
+        const grouped = groupByDate(all);
+        const initialOpen = {};
+        grouped.forEach((g, i) => { initialOpen[g.dateKey] = i === 0; });
+        setOpenDates(initialOpen);
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
@@ -93,6 +155,10 @@ export default function DailyJobs() {
   if (error) return <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-red-700">Error: {error}</div>;
 
   const grouped = groupByDate(jobs);
+
+  const toggleDate = (dateKey) => {
+    setOpenDates(prev => ({ ...prev, [dateKey]: !prev[dateKey] }));
+  };
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -108,35 +174,14 @@ export default function DailyJobs() {
           <p className="text-gray-400 text-sm mt-1">Jobs appear here after the agent runs at 8:00 AM on a weekday.</p>
         </div>
       ) : (
-        grouped.map(group => {
-          const primary = group.jobs.filter(j => j.digest_bucket === 'primary');
-          const secondary = group.jobs.filter(j => j.digest_bucket === 'secondary');
-          return (
-            <div key={group.dateKey} className="mb-8">
-              <h2 className="text-lg font-bold text-gray-800 mb-3 pb-2 border-b border-gray-200">
-                {group.label} <span className="text-sm font-normal text-gray-400">({group.jobs.length})</span>
-              </h2>
-
-              {primary.length > 0 && (
-                <div className="mb-4">
-                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">⭐ Top Matches ({primary.length})</h3>
-                  <div className="space-y-3">
-                    {primary.map(job => <JobCard key={job.job_hash} job={job} />)}
-                  </div>
-                </div>
-              )}
-
-              {secondary.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">🔎 Also Worth a Look ({secondary.length})</h3>
-                  <div className="space-y-3">
-                    {secondary.map(job => <JobCard key={job.job_hash} job={job} />)}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })
+        grouped.map(group => (
+          <DateGroup
+            key={group.dateKey}
+            group={group}
+            isOpen={!!openDates[group.dateKey]}
+            onToggle={() => toggleDate(group.dateKey)}
+          />
+        ))
       )}
     </div>
   );
