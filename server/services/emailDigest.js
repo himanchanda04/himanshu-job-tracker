@@ -1,6 +1,16 @@
-const RESEND_KEY   = process.env.RESEND_API_KEY;
-const FROM_EMAIL   = process.env.RESEND_FROM_EMAIL || 'scout@jobtracker.app';
-const FRONTEND_URL = process.env.FRONTEND_URL      || 'https://your-app.vercel.app';
+import nodemailer from 'nodemailer';
+
+const GMAIL_USER     = process.env.GMAIL_USER;
+const GMAIL_APP_PASS = process.env.GMAIL_APP_PASSWORD;
+const FRONTEND_URL   = process.env.FRONTEND_URL || 'https://your-app.vercel.app';
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: GMAIL_USER,
+    pass: GMAIL_APP_PASS,
+  },
+});
 
 function timeAgo(date) {
   if (!date) return 'recently';
@@ -21,6 +31,7 @@ function scoreColor(score) {
 const CATEGORY_LABELS = {
   marketing:      'Marketing',
   data_analytics: 'Data / Analytics',
+  analytics:      'Analytics',
   digital:        'Digital',
   finance:        'Finance',
   admin:          'Admin',
@@ -84,8 +95,8 @@ function jobCard(job) {
  * @param {object} runStats - { sourcesUsed: string[] }
  */
 export async function sendScoutDigest(userEmail, userName, digest, runStats) {
-  if (!RESEND_KEY) {
-    console.warn('[Scout] Resend key not set — email skipped');
+  if (!GMAIL_USER || !GMAIL_APP_PASS) {
+    console.warn('[Scout] Gmail credentials not set — email skipped');
     return;
   }
 
@@ -171,20 +182,17 @@ export async function sendScoutDigest(userEmail, userName, digest, runStats) {
 </html>`;
 
   const totalCount = primary.length + secondary.length;
-  const res = await fetch('https://api.resend.com/emails', {
-    method:  'POST',
-    headers: { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from:    FROM_EMAIL,
-      to:      [userEmail],
-      subject: `☀️ ${primary.length} top match${primary.length !== 1 ? 'es' : ''} + ${secondary.length} worth a look — ${dateStr}`,
-      html,
-    }),
-  });
+  const subject = `☀️ ${primary.length} top match${primary.length !== 1 ? 'es' : ''} + ${secondary.length} worth a look — ${dateStr}`;
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Resend error: ${err}`);
+  try {
+    await transporter.sendMail({
+      from:    `"Job Scout" <${GMAIL_USER}>`,
+      to:      userEmail,
+      subject,
+      html,
+    });
+  } catch (err) {
+    throw new Error(`Gmail send error: ${err.message}`);
   }
 
   console.log(`[Scout] ✅ Email sent → ${userEmail} (${totalCount} jobs: ${primary.length} primary, ${secondary.length} secondary)`);
