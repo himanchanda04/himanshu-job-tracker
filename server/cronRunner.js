@@ -85,15 +85,29 @@ async function main() {
         if (ins.rows[0]?.is_new) newCount++;
       }
 
+      const allDigestHashes = [...primaryIds, ...secondaryIds];
+      let unnotifiedHashes = new Set();
+      if (allDigestHashes.length) {
+        const { rows: unsent } = await pool.query(
+          `SELECT job_hash FROM scout_results WHERE user_id=$1 AND job_hash = ANY($2) AND notified_at IS NULL`,
+          [user.id, allDigestHashes]
+        );
+        unnotifiedHashes = new Set(unsent.map(r => r.job_hash));
+      }
+      const primaryToEmail   = primary.filter(j => unnotifiedHashes.has(j.job_hash));
+      const secondaryToEmail = secondary.filter(j => unnotifiedHashes.has(j.job_hash));
+
       await pool.query(`DELETE FROM scout_results WHERE user_id=$1 AND status='seen' AND last_seen_at < NOW()-INTERVAL '30 days'`, [user.id]);
       await pool.query(`UPDATE scout_runs SET completed_at=NOW(), status='completed', jobs_fetched=$1, jobs_matched=$2, sources_used=$3, sources_failed=$4, claude_cost_usd=$5 WHERE id=$6`,
         [allJobs.length, primary.length + secondary.length, sourcesUsed, sourcesFailed, totalClaudeCost, runId]);
 
-      if ((primary.length || secondary.length) && user.email_notify) {
-        await sendScoutDigest(user.email, user.name, { primary, secondary }, { sourcesUsed });
-        console.log(`[CronRunner] ✅ Email sent to ${user.email} — ${primary.length} primary, ${secondary.length} secondary`);
+      if ((primaryToEmail.length || secondaryToEmail.length) && user.email_notify) {
+        await sendScoutDigest(user.email, user.name, { primary: primaryToEmail, secondary: secondaryToEmail }, { sourcesUsed });
+        const emailedHashes = [...primaryToEmail, ...secondaryToEmail].map(j => j.job_hash);
+        await pool.query(`UPDATE scout_results SET notified_at=NOW() WHERE user_id=$1 AND job_hash = ANY($2)`, [user.id, emailedHashes]);
+        console.log(`[CronRunner] ✅ Email sent to ${user.email} — ${primaryToEmail.length} primary, ${secondaryToEmail.length} secondary (new only)`);
       } else {
-        console.log(`[CronRunner] No jobs to email for user ${user.id}`);
+        console.log(`[CronRunner] No new jobs to email for user ${user.id}`);
       }
     } catch (err) {
       console.error(`[CronRunner] ❌ Failed for user ${user.id}:`, err.message);
